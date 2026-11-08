@@ -65,15 +65,46 @@ export interface RegionConnection {
   readonly type: 'cave' | 'mine' | 'railway' | 'ravine' | 'road' | 'river';
 }
 
+export type TopographyKind =
+  | 'lake'
+  | 'thin_ice'
+  | 'river'
+  | 'railway'
+  | 'road'
+  | 'trail'
+  | 'powerline'
+  | 'cliff'
+  | 'ridge'
+  | 'bridge'
+  | 'structure'
+  | 'forest';
+
 export interface RegionTopographyFeature {
-  readonly kind: 'lake' | 'river' | 'railway' | 'road' | 'ridge' | 'forest';
+  readonly kind: TopographyKind;
   /** Набор точек [x, y] в пространстве 0..1000 */
   readonly points: readonly (readonly [number, number])[];
   readonly labelRu?: string;
 }
 
+export interface RegionAreaLabel {
+  readonly x: number;
+  readonly y: number;
+  readonly textRu: string;
+  readonly subRu?: string;
+  readonly style?: 'landmark' | 'water' | 'danger' | 'forest';
+}
+
+export interface RegionExitBanner {
+  readonly edge: 'north' | 'south' | 'west' | 'east';
+  /** Смещение вдоль края (15..85 %) */
+  readonly posPct: number;
+  readonly labelRu: string;
+  readonly targetRegionId?: string;
+}
+
 export interface RegionModel {
   readonly id: string;
+  readonly imageKey: string;
   readonly nameRu: string;
   readonly nameEn: string;
   readonly tier: RegionTier;
@@ -87,10 +118,13 @@ export interface RegionModel {
   readonly hasAmmoBench: boolean;
   readonly hasTrader?: boolean;
   readonly summaryRu: string;
+  readonly navigationGuideRu: string;
   readonly survivalTipsRu: readonly string[];
   readonly keyLandmarksRu: readonly string[];
   readonly connections: readonly RegionConnection[];
   readonly topography: readonly RegionTopographyFeature[];
+  readonly areaLabels?: readonly RegionAreaLabel[];
+  readonly exitBanners?: readonly RegionExitBanner[];
   readonly fandomSlug: string;
 }
 
@@ -104,10 +138,13 @@ export interface MapMarkerModel {
   readonly x: number;
   /** Координата Y (0..1000) */
   readonly y: number;
+  /** Квадрат сетки, если нужно подсказать ориентир, вычисляется автоматически по X/Y */
   readonly descriptionRu: string;
+  readonly landmarkHintRu?: string;
   readonly indoorWarmth?: boolean;
   readonly hasBed?: boolean;
   readonly hasStove?: boolean;
+  readonly dangerRadius?: number;
   readonly standardLootRu: readonly string[];
   /** Особые заметки для «Незваного гостя» / «Страданий» */
   readonly interloperLootRu: readonly string[];
@@ -117,28 +154,40 @@ export interface MapMarkerModel {
 
 export interface WikiItemModel {
   readonly id: string;
+  readonly imageKey: string;
   readonly nameRu: string;
   readonly nameEn: string;
   readonly category: ItemCategory;
+  readonly slotOrSubcatRu: string;
   readonly weightKg: number;
   readonly warmthC?: number;
   readonly windproofC?: number;
+  readonly waterproofPct?: number;
   readonly protectionPct?: number;
+  readonly sprintPenaltyPct?: number;
   readonly calories?: number;
+  readonly vitaminC?: 'Высокий' | 'Средний' | 'Нет';
   readonly durabilityInfo: string;
   readonly availableOnInterloper: boolean;
   readonly whereToFindRu: string;
   readonly descriptionRu: string;
   readonly craftingOrRepairRu: string;
+  readonly harvestYieldRu?: string;
+  readonly proTipsRu?: readonly string[];
   readonly fandomSlug: string;
 }
 
 export interface WildlifeModel {
   readonly id: string;
+  readonly imageKey: string;
   readonly nameRu: string;
   readonly nameEn: string;
   readonly type: 'predator' | 'passive' | 'flora';
   readonly dangerLevel: 'Безопасно' | 'Средняя угроза' | 'Высокая угроза' | 'Смертельно';
+  readonly bleedOutOrHpRu: string;
+  readonly weightMeatKgRu: string;
+  readonly curingTimeRu: string;
+  readonly parasiteRisk: boolean;
   readonly regionsSummaryRu: string;
   readonly harvestYieldRu: string;
   readonly tacticsRu: string;
@@ -148,9 +197,12 @@ export interface WildlifeModel {
 
 export interface AfflictionModel {
   readonly id: string;
+  readonly imageKey: string;
   readonly nameRu: string;
   readonly nameEn: string;
   readonly severity: 'Лёгкая' | 'Опасная' | 'Критическая';
+  readonly durationRu: string;
+  readonly cureItemsRu: readonly string[];
   readonly causeRu: string;
   readonly effectsRu: string;
   readonly treatmentRu: string;

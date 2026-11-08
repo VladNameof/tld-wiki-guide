@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { Anvil, ArrowUpRight, Compass, Flame, Hammer, Radio } from 'lucide-react';
 import { REGION_TIER_META } from '../../l0-primitives/constants.ts';
 import { formatSignedTempC } from '../../l0-primitives/textUtils.ts';
-import { computeRegionProgress, getAllRegions, getRegionById } from '../../l2-models/selectors.ts';
+import {
+  computeRegionProgress,
+  getAllRegions,
+  getRegionById,
+  getWikiImageUrl,
+} from '../../l2-models/selectors.ts';
 import { executeCommand, useCommandState } from '../hooks/useCommandState.ts';
 
 export function WorldIslandMap() {
@@ -12,6 +17,7 @@ export function WorldIslandMap() {
 
   const visitedSet = new Set(state.journal.visitedMarkerIds);
   const activePreviewRegion = getRegionById(hoveredId ?? state.selectedRegionId);
+  const previewImg = getWikiImageUrl(activePreviewRegion.imageKey);
   const isCharcoal = state.mapTheme === 'charcoal';
 
   // Уникальные рёбра переходов между регионами
@@ -51,19 +57,23 @@ export function WorldIslandMap() {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#243342] bg-[#121c26] px-4 py-2.5">
           <div>
             <h3 className="font-tld-display text-base font-bold tracking-wider text-[#f3efe6] uppercase">
-              Схема переходов Острова Великого Медведя
+              Схема всех 15 регионов Острова Великого Медведя и Дальних земель
             </h3>
             <p className="text-xs text-[#8ea3b5]">
-              Нажмите на любой регион, чтобы открыть его детальную угольную карту (Leaflet)
+              Нажмите на любой регион, чтобы открыть его детальную угольную карту с сеткой A1–H8
             </p>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-[#9eb2c4]">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#9eb2c4]">
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-0.5 w-4 bg-[#f09a3e]" /> Ж/д магистраль
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[#6cb4cc]" />{' '}
-              Пещеры / Шахты
+              Пещеры / Перевалы
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded-full border-2 border-[#a78bfa]" />{' '}
+              Дальние земли (DLC)
             </span>
           </div>
         </div>
@@ -87,27 +97,39 @@ export function WorldIslandMap() {
               </filter>
             </defs>
 
-            {/* Океан и контур замёрзшего острова */}
+            {/* Океан и контур замёрзшего острова + западный выступ Дальних земель */}
             <rect width="1000" height="640" fill={isCharcoal ? '#95a7b3' : '#081018'} />
             <path
-              d="M 45 360 C 55 180, 165 65, 340 55 C 530 42, 780 35, 935 90 C 965 180, 950 380, 910 490 C 820 555, 620 555, 440 545 C 290 535, 130 495, 45 360 Z"
+              d="M 28 320 C 32 140, 125 45, 330 48 C 530 40, 785 35, 945 90 C 972 185, 955 385, 915 495 C 820 560, 620 560, 440 548 C 265 535, 65 480, 28 320 Z"
               fill="url(#world-bg)"
               stroke={isCharcoal ? '#3f4d57' : '#3a5870'}
               strokeWidth="4"
               filter="url(#island-coast)"
             />
 
-            {/* Подпись океана */}
+            {/* Подписи зон */}
             <text
-              x="710"
-              y="595"
+              x="145"
+              y="78"
+              fill={isCharcoal ? '#4a3563' : '#c4b5fd'}
+              fontFamily="Oswald, sans-serif"
+              fontSize="13"
+              fontWeight="700"
+              letterSpacing="1.5"
+              opacity="0.82"
+            >
+              ДАЛЬНИЕ ЗЕМЛИ (FAR TERRITORY)
+            </text>
+            <text
+              x="700"
+              y="602"
               fill={isCharcoal ? '#334652' : '#4a6b82'}
               fontFamily="Cormorant Garamond, Georgia, serif"
               fontStyle="italic"
-              fontSize="20"
+              fontSize="19"
               fontWeight="700"
-              letterSpacing="3"
-              opacity="0.75"
+              letterSpacing="2.5"
+              opacity="0.78"
             >
               СЕВЕРНЫЙ ТИХИЙ ОКЕАН • ЗАМЁРЗШИЙ ЗАЛИВ
             </text>
@@ -144,9 +166,9 @@ export function WorldIslandMap() {
                     x2={x2}
                     y2={y2}
                     stroke={stroke}
-                    strokeWidth={isHighlighted ? 3.8 : 2.4}
+                    strokeWidth={isHighlighted ? 3.8 : 2.3}
                     strokeDasharray={isRail ? 'none' : '8 5'}
-                    opacity={isHighlighted ? 1 : 0.72}
+                    opacity={isHighlighted ? 1 : 0.74}
                   />
                 </g>
               );
@@ -169,6 +191,10 @@ export function WorldIslandMap() {
                     ? '#2b241d'
                     : '#6cb4cc';
 
+              const shortTitle = reg.nameRu
+                .replace(' (Дальние земли)', '')
+                .replace(' (Милтон)', '');
+
               return (
                 <g
                   key={reg.id}
@@ -183,10 +209,9 @@ export function WorldIslandMap() {
                     })
                   }
                 >
-                  {/* Внешнее свечение при выборе */}
                   {(isSelected || isHovered) && (
                     <circle
-                      r="25"
+                      r="24"
                       fill="none"
                       stroke="#f09a3e"
                       strokeWidth="2"
@@ -195,33 +220,32 @@ export function WorldIslandMap() {
                   )}
 
                   <circle
-                    r="17"
+                    r="16"
                     fill={nodeFill}
                     stroke={nodeStroke}
                     strokeWidth="2.8"
                   />
 
                   <text
-                    y="4"
+                    y="3.5"
                     textAnchor="middle"
                     fill="#f8f5ee"
                     fontFamily="JetBrains Mono, monospace"
-                    fontSize="10"
+                    fontSize="9.5"
                     fontWeight="700"
                   >
                     {prog.percentage}%
                   </text>
 
-                  {/* Плашка названия региона */}
-                  <g transform="translate(0, 31)">
+                  <g transform="translate(0, 29)">
                     <rect
-                      x="-74"
-                      y="-11"
-                      width="148"
-                      height="21"
+                      x="-68"
+                      y="-10"
+                      width="136"
+                      height="19"
                       rx="4"
-                      fill={isCharcoal ? 'rgba(30, 26, 22, 0.88)' : 'rgba(10, 17, 24, 0.9)'}
-                      stroke={isSelected || isHovered ? '#f09a3e' : 'rgba(148,163,184,0.3)'}
+                      fill={isCharcoal ? 'rgba(30, 26, 22, 0.9)' : 'rgba(10, 17, 24, 0.92)'}
+                      stroke={isSelected || isHovered ? '#f09a3e' : 'rgba(148,163,184,0.32)'}
                       strokeWidth="1"
                     />
                     <text
@@ -229,10 +253,10 @@ export function WorldIslandMap() {
                       textAnchor="middle"
                       fill={isSelected || isHovered ? '#ffd699' : '#f1ede4'}
                       fontFamily="Oswald, sans-serif"
-                      fontSize="11.5"
-                      letterSpacing="0.5"
+                      fontSize="10.8"
+                      letterSpacing="0.4"
                     >
-                      {reg.nameRu.replace(' (Дальние земли)', '').replace(' (Милтон)', '')}
+                      {shortTitle}
                     </text>
                   </g>
                 </g>
@@ -242,104 +266,129 @@ export function WorldIslandMap() {
         </div>
       </div>
 
-      {/* Правая карточка сводки выбранного/наведённого региона */}
-      <div className="flex flex-col justify-between rounded-xl border border-[#2c3d4f] bg-[#121b24] p-5 shadow-xl lg:col-span-4">
+      {/* Правая карточка сводки выбранного/наведённого региона с реальным фото */}
+      <div className="flex flex-col justify-between overflow-hidden rounded-xl border border-[#2c3d4f] bg-[#121b24] shadow-xl lg:col-span-4">
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span
-              className={`rounded border px-2 py-0.5 text-xs font-medium ${
-                REGION_TIER_META[activePreviewRegion.tier].colorClass
-              }`}
-            >
-              {REGION_TIER_META[activePreviewRegion.tier].labelRu}
-            </span>
-            <span className="font-mono text-xs text-[#6cb4cc]">
-              Ср. темп: {formatSignedTempC(activePreviewRegion.avgTempC)} • Метели:{' '}
-              {activePreviewRegion.blizzardRisk}
-            </span>
-          </div>
+          {previewImg && (
+            <div className="relative h-40 w-full overflow-hidden border-b border-[#243444]">
+              <img
+                src={previewImg}
+                alt={activePreviewRegion.nameRu}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#121b24] via-transparent to-transparent" />
+              {activePreviewRegion.isDlc && (
+                <span className="absolute top-2.5 right-2.5 rounded bg-violet-950/90 px-2 py-0.5 text-[11px] font-bold text-violet-200 border border-violet-400/40">
+                  DLC: Tales from the Far Territory
+                </span>
+              )}
+            </div>
+          )}
 
-          <h3 className="mt-3 font-tld-display text-2xl font-bold text-[#f5f1e8] uppercase">
-            {activePreviewRegion.nameRu}
-          </h3>
-          <p className="font-tld-journal text-base italic text-[#9db0c0]">
-            {activePreviewRegion.nameEn}
-          </p>
+          <div className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span
+                className={`rounded border px-2 py-0.5 text-xs font-medium ${
+                  REGION_TIER_META[activePreviewRegion.tier].colorClass
+                }`}
+              >
+                {REGION_TIER_META[activePreviewRegion.tier].labelRu}
+              </span>
+              <span className="font-mono text-xs text-[#6cb4cc]">
+                Ср. темп: {formatSignedTempC(activePreviewRegion.avgTempC)} • Метели:{' '}
+                {activePreviewRegion.blizzardRisk}
+              </span>
+            </div>
 
-          <p className="mt-3 text-sm leading-relaxed text-[#cbd5e1]">
-            {activePreviewRegion.summaryRu}
-          </p>
+            <h3 className="mt-2.5 font-tld-display text-2xl font-bold text-[#f5f1e8] uppercase">
+              {activePreviewRegion.nameRu}
+            </h3>
+            <p className="font-tld-journal text-base italic text-[#9db0c0]">
+              {activePreviewRegion.nameEn}
+            </p>
 
-          {/* Инфраструктура выживания */}
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            {activePreviewRegion.hasWorkbench && (
-              <span className="inline-flex items-center gap-1 rounded border border-sky-500/30 bg-sky-950/40 px-2.5 py-1 text-sky-200">
-                <Hammer className="h-3.5 w-3.5" /> Верстак
-              </span>
-            )}
-            {activePreviewRegion.hasForge && (
-              <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-950/40 px-2.5 py-1 text-amber-200">
-                <Anvil className="h-3.5 w-3.5" /> Кузница
-              </span>
-            )}
-            {activePreviewRegion.hasAmmoBench && (
-              <span className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-950/40 px-2.5 py-1 text-rose-200">
-                <Flame className="h-3.5 w-3.5" /> Верстак патронов
-              </span>
-            )}
-            {activePreviewRegion.hasTrader && (
-              <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-950/40 px-2.5 py-1 text-emerald-200">
-                <Radio className="h-3.5 w-3.5" /> Торговец Сазерленд
-              </span>
-            )}
-          </div>
+            <p className="mt-2.5 text-xs leading-relaxed text-[#cbd5e1]">
+              {activePreviewRegion.summaryRu}
+            </p>
 
-          {/* Маршруты переходов */}
-          <div className="mt-5">
-            <h4 className="text-xs font-semibold tracking-wider text-[#8ea3b5] uppercase">
-              Связанные регионы и переходы:
-            </h4>
-            <ul className="mt-2 space-y-1.5 text-xs">
-              {activePreviewRegion.connections.map((conn) => {
-                const target = getRegionById(conn.targetRegionId);
-                return (
-                  <li key={conn.targetRegionId}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        executeCommand('map.selectRegion', {
-                          regionId: target.id,
-                          openRegionMap: true,
-                        })
-                      }
-                      className="flex w-full cursor-pointer items-center justify-between rounded border border-[#223140] bg-[#0e161d] px-2.5 py-1.5 text-left transition hover:border-[#d97724]/50"
-                    >
-                      <span className="font-medium text-[#e4dfd5]">{target.nameRu}</span>
-                      <span className="ml-2 truncate text-[11px] text-[#8ea3b5]">
-                        {conn.viaRu}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="mt-3 rounded-lg border border-[#233446] bg-[#0c131a] p-2.5 text-xs text-[#d6e0ea]">
+              <strong className="text-[#ffd699]">🧭 Ориентиры: </strong>
+              {activePreviewRegion.navigationGuideRu}
+            </div>
+
+            {/* Инфраструктура выживания */}
+            <div className="mt-3.5 flex flex-wrap gap-1.5 text-xs">
+              {activePreviewRegion.hasWorkbench && (
+                <span className="inline-flex items-center gap-1 rounded border border-sky-500/30 bg-sky-950/40 px-2 py-0.5 text-sky-200">
+                  <Hammer className="h-3 w-3" /> Верстак
+                </span>
+              )}
+              {activePreviewRegion.hasForge && (
+                <span className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-950/40 px-2 py-0.5 text-amber-200">
+                  <Anvil className="h-3 w-3" /> Кузница
+                </span>
+              )}
+              {activePreviewRegion.hasAmmoBench && (
+                <span className="inline-flex items-center gap-1 rounded border border-rose-500/40 bg-rose-950/40 px-2 py-0.5 text-rose-200">
+                  <Flame className="h-3 w-3" /> Верстак патронов
+                </span>
+              )}
+              {activePreviewRegion.hasTrader && (
+                <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-950/40 px-2 py-0.5 text-emerald-200">
+                  <Radio className="h-3 w-3" /> Торговец Сазерленд
+                </span>
+              )}
+            </div>
+
+            {/* Маршруты переходов */}
+            <div className="mt-4">
+              <h4 className="text-xs font-semibold tracking-wider text-[#8ea3b5] uppercase">
+                Связанные регионы ({activePreviewRegion.connections.length}):
+              </h4>
+              <ul className="mt-1.5 space-y-1 text-xs">
+                {activePreviewRegion.connections.map((conn) => {
+                  const target = getRegionById(conn.targetRegionId);
+                  return (
+                    <li key={conn.targetRegionId}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          executeCommand('map.selectRegion', {
+                            regionId: target.id,
+                            openRegionMap: true,
+                          })
+                        }
+                        className="flex w-full cursor-pointer items-center justify-between rounded border border-[#223140] bg-[#0e161d] px-2.5 py-1.5 text-left transition hover:border-[#d97724]/50"
+                      >
+                        <span className="font-medium text-[#e4dfd5]">{target.nameRu}</span>
+                        <span className="ml-2 truncate text-[11px] text-[#8ea3b5]">
+                          {conn.viaRu}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            executeCommand('map.selectRegion', {
-              regionId: activePreviewRegion.id,
-              openRegionMap: true,
-            })
-          }
-          className="mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#d97724] px-4 py-2.5 font-tld-display text-sm font-bold tracking-wider text-[#0b1116] uppercase shadow-lg transition hover:bg-[#f09a3e]"
-        >
-          <Compass className="h-4 w-4" />
-          Открыть угольную карту: {activePreviewRegion.nameRu}
-          <ArrowUpRight className="h-4 w-4" />
-        </button>
+        <div className="px-5 pb-5">
+          <button
+            type="button"
+            onClick={() =>
+              executeCommand('map.selectRegion', {
+                regionId: activePreviewRegion.id,
+                openRegionMap: true,
+              })
+            }
+            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#d97724] px-4 py-2.5 font-tld-display text-sm font-bold tracking-wider text-[#0b1116] uppercase shadow-lg transition hover:bg-[#f09a3e]"
+          >
+            <Compass className="h-4 w-4" />
+            Открыть угольную карту: {activePreviewRegion.nameRu}
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

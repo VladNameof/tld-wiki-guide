@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import {
+  ArrowRight,
   CheckCircle2,
   Circle,
+  Compass,
   Download,
   ExternalLink,
   Filter,
   Globe2,
   MapPinPlus,
+  Navigation,
   RotateCcw,
   Sparkles,
+  Tag,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -19,6 +23,7 @@ import {
   MAP_CANVAS_SIZE,
   MARKER_CATEGORIES,
 } from '../../l0-primitives/constants.ts';
+import { clampMapCoord, formatGridSector } from '../../l0-primitives/textUtils.ts';
 import type {
   CustomNoteIcon,
   MapMarkerModel,
@@ -30,6 +35,7 @@ import {
   getAllRegions,
   getEffectiveLootLines,
   getRegionById,
+  getWikiImageUrl,
   isLowLootDifficulty,
 } from '../../l2-models/selectors.ts';
 import { commandEngine } from '../../l3-commands/commandRegistry.ts';
@@ -50,10 +56,12 @@ export function RegionLeafletMap() {
   const state = useCommandState();
   const allRegions = getAllRegions();
   const region = getRegionById(state.selectedRegionId);
+  const regionImg = getWikiImageUrl(region.imageKey);
   const diffMeta = DIFFICULTY_BY_ID[state.difficulty];
 
   const [markerSearch, setMarkerSearch] = useState('');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [hoverCoords, setHoverCoords] = useState<PendingNoteCoords | null>(null);
   const [pendingCoords, setPendingCoords] = useState<PendingNoteCoords | null>(null);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteBody, setNoteBody] = useState('');
@@ -116,11 +124,11 @@ export function RegionLeafletMap() {
     const map = L.map(container, {
       crs: L.CRS.Simple,
       minZoom: -0.6,
-      maxZoom: 2.4,
+      maxZoom: 2.5,
       zoomSnap: 0.25,
       maxBounds: [
-        [-140, -140],
-        [MAP_CANVAS_SIZE + 140, MAP_CANVAS_SIZE + 140],
+        [-150, -150],
+        [MAP_CANVAS_SIZE + 150, MAP_CANVAS_SIZE + 150],
       ],
       attributionControl: false,
     });
@@ -157,7 +165,7 @@ export function RegionLeafletMap() {
     }
   }, [region, state.mapTheme, state.mapViewLevel]);
 
-  // Обработка клика по карте в режиме рисования угольной заметки
+  // Обработка клика и движения курсора по карте (живой квадрат сетки A1..H8)
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
@@ -165,18 +173,31 @@ export function RegionLeafletMap() {
     const onMapClick = (e: L.LeafletMouseEvent) => {
       if (!commandEngine.getState().isDrawingCustomNote) return;
       setPendingCoords({
-        x: Math.round(e.latlng.lng),
-        y: Math.round(e.latlng.lat),
+        x: clampMapCoord(e.latlng.lng),
+        y: clampMapCoord(e.latlng.lat),
       });
     };
 
+    const onMouseMove = (e: L.LeafletMouseEvent) => {
+      setHoverCoords({
+        x: clampMapCoord(e.latlng.lng),
+        y: clampMapCoord(e.latlng.lat),
+      });
+    };
+
+    const onMouseOut = () => setHoverCoords(null);
+
     map.on('click', onMapClick);
+    map.on('mousemove', onMouseMove);
+    map.on('mouseout', onMouseOut);
     return () => {
       map.off('click', onMapClick);
+      map.off('mousemove', onMouseMove);
+      map.off('mouseout', onMouseOut);
     };
   }, [state.mapViewLevel]);
 
-  // Рендеринг маркеров локаций и пользовательских угольных меток
+  // Рендеринг опасных радиусов хищников, маркеров локаций и пользовательских угольных меток
   useEffect(() => {
     const map = leafletMapRef.current;
     const group = markersLayerRef.current;
@@ -187,18 +208,37 @@ export function RegionLeafletMap() {
     for (const marker of visibleMarkers) {
       const isVisited = visitedSet.has(marker.id);
       const isFocused = activeMarker?.id === marker.id;
+      const sector = formatGridSector(marker.x, marker.y);
+
+      if (marker.dangerRadius && marker.dangerRadius > 0) {
+        L.circle([marker.y, marker.x], {
+          radius: marker.dangerRadius,
+          color: '#ef4444',
+          weight: 1.5,
+          dashArray: '5 5',
+          fillColor: '#ef4444',
+          fillOpacity: 0.09,
+          interactive: false,
+        }).addTo(group);
+      }
 
       const leafletMarker = L.marker([marker.y, marker.x], {
+        zIndexOffset: isFocused ? 1000 : 0,
         icon: createCharcoalLeafletIcon({
           category: marker.category,
           isVisited,
           isFocused,
+          labelRu: marker.nameRu,
+          showLabel: state.showMarkerLabels,
         }),
       });
 
       leafletMarker.bindTooltip(
-        `<div style="font-weight:600;font-size:12px;">${marker.nameRu}${isVisited ? ' ✓' : ''}</div>`,
-        { direction: 'top', offset: [0, -14] },
+        `<div style="font-weight:700;font-size:12px;">[${sector}] ${marker.nameRu}${isVisited ? ' ✓' : ''}</div>` +
+          (marker.landmarkHintRu
+            ? `<div style="font-size:11px;color:#cbd5e1;max-width:240px;white-space:normal;margin-top:2px;">🧭 ${marker.landmarkHintRu}</div>`
+            : ''),
+        { direction: 'top', offset: [0, -16] },
       );
 
       leafletMarker.on('click', () => {
@@ -209,13 +249,14 @@ export function RegionLeafletMap() {
       leafletMarker.addTo(group);
 
       if (state.focusedMarkerId === marker.id) {
-        map.flyTo([marker.y, marker.x], Math.max(map.getZoom(), 0.5), {
+        map.flyTo([marker.y, marker.x], Math.max(map.getZoom(), 0.6), {
           duration: 0.45,
         });
       }
     }
 
     for (const custom of regionCustomNotes) {
+      const sector = formatGridSector(custom.x, custom.y);
       const noteMarker = L.marker([custom.y, custom.x], {
         icon: createCustomNoteLeafletIcon(custom.icon),
       });
@@ -223,7 +264,7 @@ export function RegionLeafletMap() {
         `<div style="min-width:180px;">
           <div style="font-weight:700;color:#ffd699;margin-bottom:4px;">✏️ ${custom.title}</div>
           <div style="font-size:12px;color:#cbd5e1;">${custom.note || 'Угольная пометка выжившего'}</div>
-          <div style="font-size:10px;color:#788b9c;margin-top:6px;">Коорд: ${custom.x}, ${custom.y}</div>
+          <div style="font-size:10px;color:#788b9c;margin-top:6px;">Квадрат ${sector} (X:${custom.x}, Y:${custom.y})</div>
         </div>`,
       );
       noteMarker.addTo(group);
@@ -235,6 +276,7 @@ export function RegionLeafletMap() {
     activeMarker?.id,
     state.focusedMarkerId,
     state.mapViewLevel,
+    state.showMarkerLabels,
   ]);
 
   const handleSaveCustomNote = (e: React.FormEvent) => {
@@ -297,7 +339,7 @@ export function RegionLeafletMap() {
               }`}
             >
               <Globe2 className="h-4 w-4" />
-              Весь Остров (12 регионов)
+              Весь Остров ({allRegions.length} регионов)
             </button>
 
             <button
@@ -327,15 +369,30 @@ export function RegionLeafletMap() {
               >
                 {allRegions.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.nameRu} ({r.nameEn})
+                    {r.nameRu} ({r.nameEn}){r.isDlc ? ' [DLC]' : ''}
                   </option>
                 ))}
               </select>
             )}
           </div>
 
-          {/* Переключатель визуального стиля карты */}
-          <div className="flex items-center gap-2">
+          {/* Переключатели подписей локаций и визуального стиля карты */}
+          <div className="flex flex-wrap items-center gap-2">
+            {state.mapViewLevel === 'region' && (
+              <button
+                type="button"
+                onClick={() => executeCommand('map.toggleMarkerLabels', {})}
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                  state.showMarkerLabels
+                    ? 'border-[#d97724]/60 bg-[#d97724]/15 text-[#ffd699]'
+                    : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
+                }`}
+              >
+                <Tag className="h-3.5 w-3.5 text-[#f09a3e]" />
+                Подписи локаций: {state.showMarkerLabels ? 'Вкл' : 'Скрыты'}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() =>
@@ -346,11 +403,11 @@ export function RegionLeafletMap() {
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-[#32465a] bg-[#16222d] px-3 py-2 text-xs font-medium text-[#e4dfd5] transition hover:border-[#6cb4cc]"
             >
               <Sparkles className="h-3.5 w-3.5 text-[#6cb4cc]" />
-              Стиль карты:{' '}
+              Стиль:{' '}
               <strong className="text-[#ffd699]">
                 {state.mapTheme === 'charcoal'
-                  ? 'Уголь на пергаменте (Как в игре)'
-                  : 'Полярное сияние (Ночь)'}
+                  ? 'Уголь на пергаменте'
+                  : 'Полярное сияние'}
               </strong>
             </button>
           </div>
@@ -485,7 +542,7 @@ export function RegionLeafletMap() {
                 type="search"
                 value={markerSearch}
                 onChange={(e) => setMarkerSearch(e.target.value)}
-                placeholder="Фильтр точек (напр. ружьё, бункер)..."
+                placeholder="Поиск (ружьё, бункер, ЛЭП, медведь)..."
                 aria-label="Поиск маркеров на текущей карте"
                 className="mt-2.5 w-full rounded-md border border-[#2a3b4c] bg-[#0b1116] px-2.5 py-1.5 text-xs text-[#e4dfd5] placeholder-[#687d90] focus:border-[#d97724] focus:outline-none"
               />
@@ -518,6 +575,9 @@ export function RegionLeafletMap() {
                   );
                 })}
               </div>
+              <p className="mt-2.5 text-[11px] text-[#7c91a4]">
+                🔴 Пунктирные красные круги показывают зоны патрулирования медведей, лосей, стай и волков.
+              </p>
             </div>
 
             {/* Пользовательские угольные заметки и Бэкап дневника */}
@@ -527,7 +587,7 @@ export function RegionLeafletMap() {
               </h3>
               {regionCustomNotes.length === 0 ? (
                 <p className="mt-2 text-xs text-[#778c9e]">
-                  Пока нет заметок в этом регионе. Нажмите «Нанести свою метку углём», чтобы отметить схрон с мясом или медведя.
+                  Пока нет заметок в этом регионе. Нажмите «Нанести свою метку углём», чтобы отметить схрон с мясом или шкурами.
                 </p>
               ) : (
                 <ul className="mt-2 max-h-36 space-y-1.5 overflow-y-auto text-xs">
@@ -536,7 +596,9 @@ export function RegionLeafletMap() {
                       key={n.id}
                       className="flex items-center justify-between rounded border border-[#263646] bg-[#0d151c] px-2.5 py-1.5"
                     >
-                      <span className="truncate font-medium text-[#ffd699]">{n.title}</span>
+                      <span className="truncate font-medium text-[#ffd699]">
+                        [{formatGridSector(n.x, n.y)}] {n.title}
+                      </span>
                       <button
                         type="button"
                         onClick={() =>
@@ -584,7 +646,7 @@ export function RegionLeafletMap() {
             </div>
           </aside>
 
-          {/* Центр: Холст интерактивной карты Leaflet */}
+          {/* Центр: Холст интерактивной карты Leaflet + Памятка навигации по региону */}
           <div className="space-y-4 lg:col-span-6">
             <div className="relative overflow-hidden rounded-xl border-2 border-[#354656] bg-[#10171d] shadow-2xl">
               {state.isDrawingCustomNote && (
@@ -593,9 +655,23 @@ export function RegionLeafletMap() {
                 </div>
               )}
 
+              {/* Живой индикатор сектора сетки под курсором */}
+              <div className="pointer-events-none absolute bottom-3 left-3 z-[450] rounded-md border border-[#33485c] bg-[#0b1219]/90 px-2.5 py-1 font-mono text-[11px] text-[#e4dfd5] shadow">
+                {hoverCoords ? (
+                  <>
+                    Квадрат: <strong className="text-[#ffd699]">{formatGridSector(hoverCoords.x, hoverCoords.y)}</strong>{' '}
+                    <span className="text-[#8ea3b5]">
+                      (X:{hoverCoords.x}, Y:{hoverCoords.y})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[#9cb0c2]">Сетка ориентирования A1–H8 • Колесо мыши — зум</span>
+                )}
+              </div>
+
               <div
                 ref={mapContainerRef}
-                className={`h-[520px] w-full sm:h-[590px] ${
+                className={`h-[540px] w-full sm:h-[620px] ${
                   state.isDrawingCustomNote ? 'cursor-crosshair' : ''
                 }`}
               />
@@ -609,8 +685,8 @@ export function RegionLeafletMap() {
               >
                 <div className="flex items-center justify-between">
                   <h4 className="font-tld-display text-sm font-bold text-[#ffd699] uppercase">
-                    Новая угольная заметка в регионе «{region.nameRu}» (X:{pendingCoords.x}, Y:
-                    {pendingCoords.y})
+                    Новая угольная заметка • Сектор {formatGridSector(pendingCoords.x, pendingCoords.y)} (X:
+                    {pendingCoords.x}, Y:{pendingCoords.y})
                   </h4>
                   <button
                     type="button"
@@ -658,6 +734,55 @@ export function RegionLeafletMap() {
                 </div>
               </form>
             )}
+
+            {/* Штурманская карточка ориентирования по региону + реальное фото локации */}
+            <div className="overflow-hidden rounded-xl border border-[#2a3b4c] bg-[#121b24] shadow-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-12">
+                {regionImg && (
+                  <div className="sm:col-span-4">
+                    <img
+                      src={regionImg}
+                      alt={region.nameRu}
+                      loading="lazy"
+                      className="h-44 w-full object-cover sm:h-full"
+                    />
+                  </div>
+                )}
+                <div className={`p-4 ${regionImg ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[#ffd699] uppercase">
+                    <Compass className="h-4 w-4 text-[#f09a3e]" />
+                    Как ориентироваться в регионе «{region.nameRu}»
+                  </div>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[#d1dbe4]">
+                    {region.navigationGuideRu}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {region.connections.map((conn) => {
+                      const target = getRegionById(conn.targetRegionId);
+                      return (
+                        <button
+                          key={conn.targetRegionId}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMarkerId(null);
+                            executeCommand('map.selectRegion', {
+                              regionId: target.id,
+                              openRegionMap: true,
+                            });
+                          }}
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#2d4053] bg-[#0c141c] px-2.5 py-1 text-[11px] font-semibold text-[#cbd5e1] transition hover:border-[#d97724] hover:text-[#ffd699]"
+                          title={conn.viaRu}
+                        >
+                          <ArrowRight className="h-3 w-3 text-[#f09a3e]" />
+                          В «{target.nameRu}»
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Правая колонка: Подробное досье выбранной локации + список всех точек региона */}
@@ -666,10 +791,15 @@ export function RegionLeafletMap() {
               <div className="rounded-xl border border-[#d97724]/50 bg-[#131d26] p-4 shadow-xl">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="text-[11px] font-semibold text-[#f09a3e] uppercase">
-                      {MARKER_CATEGORIES.find((c) => c.id === activeMarker.category)?.labelRu}
-                    </span>
-                    <h3 className="mt-0.5 font-tld-display text-lg font-bold text-[#f6f2e9]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded bg-[#d97724]/20 px-1.5 py-0.5 font-mono text-[11px] font-bold text-[#ffd699]">
+                        Квадрат {formatGridSector(activeMarker.x, activeMarker.y)}
+                      </span>
+                      <span className="text-[11px] font-semibold text-[#f09a3e] uppercase">
+                        {MARKER_CATEGORIES.find((c) => c.id === activeMarker.category)?.labelRu}
+                      </span>
+                    </div>
+                    <h3 className="mt-1 font-tld-display text-lg font-bold text-[#f6f2e9]">
                       {activeMarker.nameRu}
                     </h3>
                     <p className="font-tld-journal text-sm italic text-[#8fa3b5]">
@@ -678,8 +808,18 @@ export function RegionLeafletMap() {
                   </div>
                 </div>
 
+                {/* Подсказка как найти точку на местности */}
+                {activeMarker.landmarkHintRu && (
+                  <div className="mt-2.5 rounded-lg border border-sky-500/30 bg-sky-950/30 px-2.5 py-2 text-xs text-sky-100">
+                    <span className="inline-flex items-center gap-1 font-semibold text-[#7dd3fc]">
+                      <Navigation className="h-3 w-3" /> Ориентир:
+                    </span>{' '}
+                    {activeMarker.landmarkHintRu}
+                  </div>
+                )}
+
                 {/* Теги удобств локации */}
-                <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+                <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px]">
                   {activeMarker.indoorWarmth && (
                     <span className="rounded bg-amber-950/60 px-2 py-0.5 text-amber-200">
                       🏠 Тёплое укрытие
@@ -693,6 +833,11 @@ export function RegionLeafletMap() {
                   {activeMarker.hasStove && (
                     <span className="rounded bg-orange-950/60 px-2 py-0.5 text-orange-200">
                       🔥 Печь / Очаг
+                    </span>
+                  )}
+                  {activeMarker.dangerRadius && (
+                    <span className="rounded bg-rose-950/70 px-2 py-0.5 text-rose-200">
+                      🐾 Зона хищника
                     </span>
                   )}
                 </div>
@@ -745,7 +890,7 @@ export function RegionLeafletMap() {
               </div>
             )}
 
-            {/* Быстрый список локаций региона + советы выживания */}
+            {/* Быстрый список локаций региона с координатами сетки */}
             <div className="rounded-xl border border-[#2a3b4c] bg-[#121b24] p-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold tracking-wider text-[#9db0c0] uppercase">
@@ -761,10 +906,11 @@ export function RegionLeafletMap() {
                 </a>
               </div>
 
-              <ul className="mt-2.5 max-h-60 space-y-1 overflow-y-auto pr-1 text-xs">
+              <ul className="mt-2.5 max-h-64 space-y-1 overflow-y-auto pr-1 text-xs">
                 {visibleMarkers.map((m) => {
                   const done = visitedSet.has(m.id);
                   const current = activeMarker?.id === m.id;
+                  const sector = formatGridSector(m.x, m.y);
                   return (
                     <li key={m.id}>
                       <button
@@ -780,6 +926,9 @@ export function RegionLeafletMap() {
                         }`}
                       >
                         <span className={`truncate ${done ? 'line-through opacity-65' : ''}`}>
+                          <span className="mr-1.5 font-mono text-[10px] text-[#8ea3b5]">
+                            [{sector}]
+                          </span>
                           {m.nameRu}
                         </span>
                         {done && <span className="ml-1 text-emerald-400">✓</span>}

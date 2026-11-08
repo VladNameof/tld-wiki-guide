@@ -16,6 +16,13 @@ import {
 import fandomSeedJson from './data/fandomSynced.json';
 import { MAP_MARKERS_DATA } from './data/markersData.ts';
 import { REGIONS_DATA } from './data/regionsData.ts';
+import wikiImagesManifest from './data/wikiImagesManifest.json';
+
+const IMAGE_MANIFEST = wikiImagesManifest as Readonly<Record<string, string>>;
+
+export function getWikiImageUrl(imageKey: string): string | null {
+  return IMAGE_MANIFEST[imageKey] ?? null;
+}
 
 export function getAllRegions(): readonly RegionModel[] {
   return REGIONS_DATA;
@@ -53,6 +60,7 @@ export function filterRegionMarkers(params: {
         marker.nameRu,
         marker.nameEn,
         marker.descriptionRu,
+        marker.landmarkHintRu ?? '',
         ...marker.standardLootRu,
         ...marker.interloperLootRu,
       )
@@ -122,7 +130,16 @@ export function searchLocalEncyclopedia(query: string): GlobalSearchHit[] {
   const hits: GlobalSearchHit[] = [];
 
   for (const r of REGIONS_DATA) {
-    if (matchesSearchQuery(query, r.nameRu, r.nameEn, r.summaryRu, ...r.keyLandmarksRu)) {
+    if (
+      matchesSearchQuery(
+        query,
+        r.nameRu,
+        r.nameEn,
+        r.summaryRu,
+        r.navigationGuideRu,
+        ...r.keyLandmarksRu,
+      )
+    ) {
       hits.push({
         id: `region-${r.id}`,
         titleRu: r.nameRu,
@@ -141,6 +158,7 @@ export function searchLocalEncyclopedia(query: string): GlobalSearchHit[] {
         m.nameRu,
         m.nameEn,
         m.descriptionRu,
+        m.landmarkHintRu ?? '',
         ...m.standardLootRu,
         ...m.interloperLootRu,
       )
@@ -159,7 +177,16 @@ export function searchLocalEncyclopedia(query: string): GlobalSearchHit[] {
   }
 
   for (const item of WIKI_ITEMS) {
-    if (matchesSearchQuery(query, item.nameRu, item.nameEn, item.descriptionRu, item.whereToFindRu)) {
+    if (
+      matchesSearchQuery(
+        query,
+        item.nameRu,
+        item.nameEn,
+        item.slotOrSubcatRu,
+        item.descriptionRu,
+        item.whereToFindRu,
+      )
+    ) {
       hits.push({
         id: `item-${item.id}`,
         titleRu: item.nameRu,
@@ -171,7 +198,16 @@ export function searchLocalEncyclopedia(query: string): GlobalSearchHit[] {
   }
 
   for (const w of WILDLIFE_ENTRIES) {
-    if (matchesSearchQuery(query, w.nameRu, w.nameEn, w.descriptionRu, w.tacticsRu)) {
+    if (
+      matchesSearchQuery(
+        query,
+        w.nameRu,
+        w.nameEn,
+        w.descriptionRu,
+        w.tacticsRu,
+        w.harvestYieldRu,
+      )
+    ) {
       hits.push({
         id: `wild-${w.id}`,
         titleRu: w.nameRu,
@@ -183,7 +219,16 @@ export function searchLocalEncyclopedia(query: string): GlobalSearchHit[] {
   }
 
   for (const a of AFFLICTION_ENTRIES) {
-    if (matchesSearchQuery(query, a.nameRu, a.nameEn, a.causeRu, a.treatmentRu)) {
+    if (
+      matchesSearchQuery(
+        query,
+        a.nameRu,
+        a.nameEn,
+        a.causeRu,
+        a.treatmentRu,
+        ...a.cureItemsRu,
+      )
+    ) {
       hits.push({
         id: `aff-${a.id}`,
         titleRu: a.nameRu,

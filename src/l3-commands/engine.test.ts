@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MARKER_CATEGORIES } from '../l0-primitives/constants.ts';
-import { matchesSearchQuery, normalizeSearchText } from '../l0-primitives/textUtils.ts';
+import {
+  formatGridSector,
+  matchesSearchQuery,
+  normalizeSearchText,
+} from '../l0-primitives/textUtils.ts';
 import {
   parseFandomQueryResponse,
   sanitizeUntrustedWikiText,
@@ -8,19 +12,32 @@ import {
 } from '../l1-codecs/fandomCodec.ts';
 import { parseSurvivorJournalJson } from '../l1-codecs/journalCodec.ts';
 import {
+  AFFLICTION_ENTRIES,
+  WIKI_ITEMS,
+  WILDLIFE_ENTRIES,
+} from '../l2-models/data/encyclopediaData.ts';
+import {
   computeRegionProgress,
   filterRegionMarkers,
+  getAllRegions,
   getEffectiveLootLines,
+  getWikiImageUrl,
   searchLocalEncyclopedia,
 } from '../l2-models/selectors.ts';
 import { TldCommandEngine } from './commandRegistry.ts';
 
-describe('L0 Primitives — Russian search normalization', () => {
+describe('L0 Primitives — Russian search normalization & Grid Sector Oracle', () => {
   it('normalizes ё to е and matches multi-token queries', () => {
     expect(normalizeSearchText('Охотничье ружьё!')).toBe('охотничье ружье');
     expect(matchesSearchQuery('ружье вогана', 'Винтовка Вогана — уникальное ружьё на ГЭС')).toBe(
       true,
     );
+  });
+
+  it('converts 0..1000 map coordinates into A1..H8 topographic grid sectors', () => {
+    expect(formatGridSector(0, 1000)).toBe('A1');
+    expect(formatGridSector(999, 0)).toBe('H8');
+    expect(formatGridSector(520, 410)).toBe('E5');
   });
 });
 
@@ -119,7 +136,7 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
     });
     expect(campOffice).toBeDefined();
     const lines = getEffectiveLootLines(campOffice!, 'interloper');
-    expect(lines.join(' ')).toContain('Увеличительное стекло');
+    expect(lines.join(' ')).toContain('Увеличительного стекла');
   });
 
   it('computes accurate region exploration percentage and searches across categories', () => {
@@ -134,12 +151,41 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
     const hits = searchLocalEncyclopedia('технический рюкзак');
     expect(hits.length).toBeGreaterThan(0);
   });
+
+  it('guarantees every region, item, wildlife, and affliction resolves a local .webp photo', () => {
+    const regions = getAllRegions();
+    expect(regions.length).toBe(15);
+    for (const r of regions) {
+      expect(getWikiImageUrl(r.imageKey), `Missing image for region ${r.id}`).toMatch(
+        /^\.\/wiki-images\/.+\.webp$/,
+      );
+    }
+    for (const item of WIKI_ITEMS) {
+      expect(getWikiImageUrl(item.imageKey), `Missing image for item ${item.id}`).toMatch(
+        /^\.\/wiki-images\/.+\.webp$/,
+      );
+    }
+    for (const w of WILDLIFE_ENTRIES) {
+      expect(getWikiImageUrl(w.imageKey), `Missing image for wildlife ${w.id}`).toMatch(
+        /^\.\/wiki-images\/.+\.webp$/,
+      );
+    }
+    for (const a of AFFLICTION_ENTRIES) {
+      expect(getWikiImageUrl(a.imageKey), `Missing image for affliction ${a.id}`).toMatch(
+        /^\.\/wiki-images\/.+\.webp$/,
+      );
+    }
+  });
 });
 
 describe('L3 Command Engine — Everything is a Command', () => {
-  it('executes commands deterministically for visited markers and custom charcoal notes', () => {
+  it('executes commands deterministically for visited markers, labels, and custom charcoal notes', () => {
     const engine = new TldCommandEngine();
     engine.execute('survivor.resetJournal', {});
+
+    expect(engine.getState().showMarkerLabels).toBe(true);
+    engine.execute('map.toggleMarkerLabels', {});
+    expect(engine.getState().showMarkerLabels).toBe(false);
 
     engine.execute('survivor.toggleVisited', { markerId: 'ml-camp-office' });
     expect(engine.getState().journal.visitedMarkerIds).toContain('ml-camp-office');

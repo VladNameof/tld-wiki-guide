@@ -23,6 +23,17 @@ export function clampMapCoord(value: number): number {
   return Math.max(0, Math.min(MAP_CANVAS_SIZE, Math.round(value)));
 }
 
+/**
+ * Переводит координаты (x: 0..1000 слева направо, y: 0..1000 снизу вверх)
+ * в буквенно-цифровой квадрат топографической сетки A1..H8 (A..H по X, 1..8 сверху вниз).
+ */
+export function formatGridSector(x: number, y: number): string {
+  const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const colIdx = Math.max(0, Math.min(7, Math.floor((x / MAP_CANVAS_SIZE) * 8)));
+  const rowFromTop = Math.max(1, Math.min(8, Math.floor(((MAP_CANVAS_SIZE - y) / MAP_CANVAS_SIZE) * 8) + 1));
+  return `${cols[colIdx]}${rowFromTop}`;
+}
+
 export function formatWeightKg(kg: number): string {
   return `${kg.toFixed(2).replace(/\.?0+$/, '')} кг`;
 }

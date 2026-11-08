@@ -14,7 +14,16 @@ import {
 import { DIFFICULTIES, REGION_TIER_META } from '../../l0-primitives/constants.ts';
 import { formatSignedTempC } from '../../l0-primitives/textUtils.ts';
 import type { WikiSectionId } from '../../l0-primitives/types.ts';
-import { computeRegionProgress, getAllRegions } from '../../l2-models/selectors.ts';
+import {
+  AFFLICTION_ENTRIES,
+  WIKI_ITEMS,
+  WILDLIFE_ENTRIES,
+} from '../../l2-models/data/encyclopediaData.ts';
+import {
+  computeRegionProgress,
+  getAllRegions,
+  getWikiImageUrl,
+} from '../../l2-models/selectors.ts';
 import { executeCommand, useCommandState } from '../hooks/useCommandState.ts';
 
 const PORTAL_CARDS: readonly {
@@ -27,42 +36,42 @@ const PORTAL_CARDS: readonly {
   {
     section: 'map',
     title: 'Интерактивная Угольная Карта',
-    desc: 'Двухуровневая карта Острова Великого Медведя и регионов с фильтрами лута под сложность, бункерами и своими метками.',
-    badge: 'Двухуровневая Leaflet CRS',
+    desc: 'Топографическая сетка A1–H8, тропы, линии ЛЭП, обрывы, тонкий лёд, зоны хищников и фильтрация лута под сложность.',
+    badge: '15 регионов + Сетка A1–H8',
     Icon: MapIcon,
   },
   {
     section: 'regions',
     title: 'Мир и Регионы Острова',
-    desc: 'Климат, кузницы, верстаки, переходы через шахты и советы по выживанию от Загадочного озера до Брошенного аэродрома.',
-    badge: '12 ключевых регионов + DLC',
+    desc: 'Фотографии и штурманские ориентиры всех 15 регионов: от Загадочного озера до Брошенного аэродрома и Расколотого перевала.',
+    badge: '15 регионов с фото',
     Icon: Compass,
   },
   {
     section: 'items',
     title: 'Инвентарь, Оружие и Одежда',
-    desc: 'Винтовки, револьверы, лук выжившего, кованые инструменты, топовая одежда, спальники из пуха и таблица доступности на Незваном госте.',
-    badge: 'Сравнение тепла и веса',
+    desc: 'Иллюстрированный каталог: винтовки, револьверы, луки, унты, парки, рации, блюда и точные характеристики тепла и веса.',
+    badge: `${WIKI_ITEMS.length} предмета с фото`,
     Icon: Package,
   },
   {
     section: 'wildlife',
-    title: 'Животные, Охота и Флора',
-    desc: 'Повадки волков, стай лесных волков, медведя, лося и пумы. Безопасная разделка туш, лечебные грибы Рейши, рогоз и лишайник.',
-    badge: 'Тактика против хищников',
+    title: 'Животные, Рыба и Флора',
+    desc: 'Фото и повадки волков, лесных и отравленных стай, медведя, лося, пумы, куропаток, рыбы и целебных растений.',
+    badge: `${WILDLIFE_ENTRIES.length} видов с фото`,
     Icon: PawPrint,
   },
   {
     section: 'afflictions',
     title: 'Болезни, Травмы и Лечение',
-    desc: 'Переохлаждение, необратимое обморожение, кишечные паразиты, сломанные рёбра, клаустрофобия и цинга.',
-    badge: 'Полный медсправочник',
+    desc: 'Переохлаждение, обморожение, паразиты, сломанные рёбра, рваные раны пумы, цинга и химическое отравление.',
+    badge: `${AFFLICTION_ENTRIES.length} диагнозов с фото`,
     Icon: HeartPulse,
   },
   {
     section: 'mechanics',
     title: 'Геймплей, Крафт и Торговец',
-    desc: 'Цепочка факелов, ковка в кузнице при 150°C, верстак боеприпасов, обустройство убежища и бартер с Сазерлендом.',
+    desc: 'Ориентирование в слепую метель, ковка в кузнице при 150°C, верстак боеприпасов и радиообмен с торговцем Сазерлендом.',
     badge: 'Секреты 500+ дней',
     Icon: Wrench,
   },
@@ -89,7 +98,7 @@ export function HomePortalView() {
         <div className="relative z-10 max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-[#d97724]/45 bg-[#d97724]/15 px-3 py-1 text-xs font-semibold text-[#ffd699]">
             <Flame className="h-3.5 w-3.5 text-[#f09a3e]" />
-            Энциклопедия Выжившего • Включая Tales from the Far Territory
+            Энциклопедия Выжившего • Все 15 регионов + Иллюстрированная база предметов и фауны
           </div>
 
           <h1 className="mt-4 font-tld-display text-3xl font-bold tracking-wide text-[#f7f3eb] uppercase sm:text-5xl">
@@ -97,9 +106,9 @@ export function HomePortalView() {
           </h1>
 
           <p className="mt-4 font-tld-journal text-lg leading-relaxed text-[#d1dbe4] sm:text-xl">
-            Добро пожаловать в интерактивный справочник по Острову Великого Медведя, созданный по
-            структуре русскоязычной вики — с живой угольной картой регионов, фильтрацией спавна под
-            выбранную сложность и личным дневником исследователя.
+            Интерактивный справочник по Острову Великого Медведя с высокодетализированной угольной
+            картой (сетка A1–H8, тропы, ЛЭП, скальные уступы и зоны хищников), фотографиями предметов
+            и животных, и фильтрацией спавна под выбранную сложность.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -122,7 +131,7 @@ export function HomePortalView() {
               className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#3a5168] bg-[#14202b]/90 px-5 py-3 font-tld-display text-sm font-bold tracking-wider text-[#f1ede4] uppercase transition hover:border-[#6cb4cc]"
             >
               <Compass className="h-4 w-4 text-[#6cb4cc]" />
-              Схема всего Острова
+              Схема всех {regions.length} регионов
             </button>
 
             <button
@@ -137,7 +146,7 @@ export function HomePortalView() {
         </div>
       </section>
 
-      {/* Главные тематические разделы (как на Заглавной странице Fandom Wiki) */}
+      {/* Главные тематические разделы */}
       <section>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-tld-display text-xl font-bold tracking-wider text-[#f3efe6] uppercase sm:text-2xl">
@@ -183,15 +192,15 @@ export function HomePortalView() {
         </div>
       </section>
 
-      {/* Быстрый переход к ключевым регионам с прогрессом исследования */}
+      {/* Быстрый переход к ключевым регионам с фотографиями и прогрессом исследования */}
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-tld-display text-xl font-bold tracking-wider text-[#f3efe6] uppercase sm:text-2xl">
-              Популярные регионы для экспедиций
+              Регионы для экспедиций (с фото и сеткой ориентирования)
             </h2>
             <p className="text-xs text-[#8ea3b5]">
-              Глубоко размечены Загадочное озеро, Горный городок (Милтон), Прибрежное шоссе, Отрадная долина и др.
+              Нажмите на регион, чтобы сразу открыть его детальную карту с тропами, ЛЭП и укрытиями.
             </p>
           </div>
           <button
@@ -199,13 +208,14 @@ export function HomePortalView() {
             onClick={() => executeCommand('nav.setSection', { section: 'regions' })}
             className="cursor-pointer text-xs font-semibold text-[#f09a3e] hover:underline"
           >
-            Все 12 регионов →
+            Все {regions.length} регионов →
           </button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {regions.slice(0, 8).map((r) => {
             const prog = computeRegionProgress(r.id, state.difficulty, visitedSet);
+            const imgUrl = getWikiImageUrl(r.imageKey);
             return (
               <button
                 key={r.id}
@@ -216,28 +226,38 @@ export function HomePortalView() {
                     openRegionMap: true,
                   })
                 }
-                className="flex cursor-pointer flex-col justify-between rounded-xl border border-[#263747] bg-[#111a23] p-4 text-left transition hover:border-[#d97724]/60"
+                className="group flex cursor-pointer flex-col justify-between overflow-hidden rounded-xl border border-[#263747] bg-[#111a23] text-left transition hover:border-[#d97724]/60"
               >
                 <div>
-                  <div className="flex items-center justify-between gap-2">
+                  {imgUrl && (
+                    <div className="relative h-28 w-full overflow-hidden border-b border-[#1f2e3c]">
+                      <img
+                        src={imgUrl}
+                        alt={r.nameRu}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                      <span className="absolute right-2 bottom-1.5 rounded bg-[#0a1016]/85 px-1.5 py-0.5 font-mono text-[11px] text-[#6cb4cc]">
+                        {formatSignedTempC(r.avgTempC)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="p-4 pb-2">
                     <span
-                      className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
+                      className={`inline-block rounded border px-2 py-0.5 text-[10px] font-medium ${
                         REGION_TIER_META[r.tier].colorClass
                       }`}
                     >
                       {REGION_TIER_META[r.tier].labelRu}
                     </span>
-                    <span className="font-mono text-xs text-[#6cb4cc]">
-                      {formatSignedTempC(r.avgTempC)}
-                    </span>
+                    <h3 className="mt-2 font-tld-display text-base font-bold text-[#f3efe6] group-hover:text-[#ffd699]">
+                      {r.nameRu}
+                    </h3>
+                    <p className="mt-1 line-clamp-2 text-xs text-[#95a8b8]">{r.summaryRu}</p>
                   </div>
-                  <h3 className="mt-2.5 font-tld-display text-base font-bold text-[#f3efe6]">
-                    {r.nameRu}
-                  </h3>
-                  <p className="mt-1 line-clamp-2 text-xs text-[#95a8b8]">{r.summaryRu}</p>
                 </div>
 
-                <div className="mt-4">
+                <div className="p-4 pt-2">
                   <div className="flex justify-between text-[11px] text-[#8ea3b5]">
                     <span>Обследовано</span>
                     <span className="font-mono text-[#3dd68c]">
@@ -257,7 +277,7 @@ export function HomePortalView() {
         </div>
       </section>
 
-      {/* Сравнительная таблица уровней сложности (интерактивно меняет режим справочника!) */}
+      {/* Сравнительная таблица уровней сложности */}
       <section className="rounded-xl border border-[#293a4b] bg-[#111a22] p-5 shadow-lg">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">

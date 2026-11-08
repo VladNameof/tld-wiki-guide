@@ -22,7 +22,7 @@ const ALLOWED_ROOT_FILES = [
   'vite.config.ts',
 ];
 
-const ALLOWED_DIRS = ['src', 'scripts', 'docs'];
+const ALLOWED_DIRS = ['src', 'scripts', 'docs', 'public'];
 
 function loadLocalEnvToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN.trim();
@@ -90,27 +90,43 @@ async function ghRequest(token, method, endpoint, body) {
   return { status: res.status, ok: res.ok, data };
 }
 
-async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branch, commitMessage) {
-  const treeItems = [];
-
-  for (const f of files) {
-    if (path.basename(f.rel).startsWith('.env')) {
-      throw new Error(`Заблокирована попытка загрузки секретного файла: ${f.rel}`);
-    }
-    const contentB64 = fs.readFileSync(f.abs).toString('base64');
+async function uploadBlobWithRetry(token, owner, repo, contentB64, label) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     const blobRes = await ghRequest(token, 'POST', `/repos/${owner}/${repo}/git/blobs`, {
       content: contentB64,
       encoding: 'base64',
     });
-    if (!blobRes.ok) {
-      throw new Error(`Не удалось создать blob для ${f.rel} (HTTP ${blobRes.status})`);
+    if (blobRes.ok) return blobRes.data.sha;
+    if (attempt < 3) {
+      await new Promise((r) => setTimeout(r, 800 * attempt));
+    } else {
+      throw new Error(`Не удалось создать blob для ${label} (HTTP ${blobRes.status})`);
     }
-    treeItems.push({
-      path: f.rel,
-      mode: '100644',
-      type: 'blob',
-      sha: blobRes.data.sha,
-    });
+  }
+}
+
+async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branch, commitMessage) {
+  const treeItems = [];
+  const batchSize = 5;
+
+  for (let i = 0; i < files.length; i += batchSize) {
+    const chunk = files.slice(i, i + batchSize);
+    const chunkItems = await Promise.all(
+      chunk.map(async (f) => {
+        if (path.basename(f.rel).startsWith('.env')) {
+          throw new Error(`Заблокирована попытка загрузки секретного файла: ${f.rel}`);
+        }
+        const contentB64 = fs.readFileSync(f.abs).toString('base64');
+        const sha = await uploadBlobWithRetry(token, owner, repo, contentB64, f.rel);
+        return {
+          path: f.rel,
+          mode: '100644',
+          type: 'blob',
+          sha,
+        };
+      }),
+    );
+    treeItems.push(...chunkItems);
   }
 
   for (const extra of extraTextFiles) {
@@ -224,7 +240,7 @@ async function main() {
     mainFiles,
     [],
     'main',
-    'feat: publish The Long Dark Wiki & Charcoal Map Guide (L0-L5)',
+    'feat: high-detail topographic maps (A1-H8, trails, powerlines, cliffs) & illustrated encyclopedia with 85 photos',
   );
   console.log(`✓ Ветка main обновлена (коммит ${mainSha})`);
 

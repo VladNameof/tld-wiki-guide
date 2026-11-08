@@ -36,6 +36,20 @@
 .tld-custom-note-marker {
   background: transparent !important;
   border: none !important;
+  overflow: visible !important;
+}
+
+.leaflet-tooltip {
+  background: rgba(14, 22, 30, 0.96) !important;
+  color: #f3efe6 !important;
+  border: 1px solid rgba(217, 119, 36, 0.55) !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.75) !important;
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: rgba(217, 119, 36, 0.55) !important;
 }
 
 .leaflet-popup-content-wrapper {

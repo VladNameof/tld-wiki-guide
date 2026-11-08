@@ -2,6 +2,19 @@ import L from 'leaflet';
 import { MARKER_CATEGORIES } from '../l0-primitives/constants.ts';
 import type { CustomNoteIcon, MarkerCategory } from '../l0-primitives/types.ts';
 
+function escHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function shortenMarkerLabel(nameRu: string): string {
+  const cleaned = nameRu.replace(/\s*\([^)]*\)/g, '').trim();
+  return cleaned.length > 24 ? `${cleaned.slice(0, 22)}…` : cleaned;
+}
+
 function getCategoryPictogramSvg(category: MarkerCategory): string {
   switch (category) {
     case 'shelter':
@@ -25,38 +38,65 @@ export function createCharcoalLeafletIcon(opts: {
   readonly category: MarkerCategory;
   readonly isVisited: boolean;
   readonly isFocused: boolean;
+  readonly labelRu?: string;
+  readonly showLabel?: boolean;
 }): L.DivIcon {
   const meta =
     MARKER_CATEGORIES.find((c) => c.id === opts.category) ?? MARKER_CATEGORIES[0]!;
   const svgInner = getCategoryPictogramSvg(opts.category);
 
   const borderRing = opts.isFocused
-    ? 'box-shadow: 0 0 0 4px rgba(240, 154, 62, 0.85), 0 6px 16px rgba(0,0,0,0.75); transform: scale(1.18);'
-    : 'box-shadow: 0 3px 10px rgba(0,0,0,0.65);';
+    ? 'box-shadow: 0 0 0 4px rgba(240, 154, 62, 0.9), 0 6px 16px rgba(0,0,0,0.8); transform: scale(1.16); z-index: 40;'
+    : 'box-shadow: 0 3px 10px rgba(0,0,0,0.68);';
 
-  const opacityStyle = opts.isVisited ? 'opacity: 0.62; filter: saturate(0.55);' : '';
+  const opacityStyle = opts.isVisited ? 'opacity: 0.65; filter: saturate(0.6);' : '';
   const visitedBadge = opts.isVisited
     ? `<span style="position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:999px;background:#3dd68c;color:#082014;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:1.5px solid #121b22;">✓</span>`
     : '';
 
+  const labelPill =
+    opts.showLabel && opts.labelRu
+      ? `<div style="
+          position: absolute;
+          top: 35px;
+          left: 50%;
+          transform: translateX(-50%);
+          white-space: nowrap;
+          background: ${opts.isFocused ? 'rgba(217, 119, 36, 0.96)' : 'rgba(18, 26, 34, 0.90)'};
+          color: ${opts.isFocused ? '#0b1116' : '#f3efe6'};
+          border: 1px solid ${opts.isFocused ? '#ffd699' : 'rgba(148, 163, 184, 0.35)'};
+          border-radius: 4px;
+          padding: 1px 5px;
+          font-family: Inter, sans-serif;
+          font-size: 10px;
+          font-weight: ${opts.isFocused ? '800' : '600'};
+          line-height: 1.25;
+          pointer-events: none;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.55);
+        ">${escHtml(shortenMarkerLabel(opts.labelRu))}</div>`
+      : '';
+
   const html = `
-    <div style="
-      position: relative;
-      width: 34px;
-      height: 34px;
-      border-radius: 50% 46% 52% 48%;
-      background: #1b2228;
-      border: 2.4px solid ${meta.colorHex};
-      color: ${meta.colorHex};
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.15s ease;
-      ${borderRing}
-      ${opacityStyle}
-    ">
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${svgInner}</svg>
-      ${visitedBadge}
+    <div style="position: relative; width: 34px; height: 34px;">
+      <div style="
+        position: relative;
+        width: 34px;
+        height: 34px;
+        border-radius: 50% 46% 52% 48%;
+        background: #1b2228;
+        border: 2.4px solid ${meta.colorHex};
+        color: ${meta.colorHex};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s ease;
+        ${borderRing}
+        ${opacityStyle}
+      ">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${svgInner}</svg>
+        ${visitedBadge}
+      </div>
+      ${labelPill}
     </div>
   `;
 
