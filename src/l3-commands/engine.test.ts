@@ -22,6 +22,7 @@ import {
   getAllRegions,
   getEffectiveLootLines,
   getWikiImageUrl,
+  resolveRegionCartography,
   searchLocalEncyclopedia,
 } from '../l2-models/selectors.ts';
 import { TldCommandEngine } from './commandRegistry.ts';
@@ -176,16 +177,48 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
       );
     }
   });
+
+  it('dynamically burns houses, removes climbing ropes, and swaps firearms for Interloper routes across all 15 regions', () => {
+    const regions = getAllRegions();
+    for (const r of regions) {
+      const cart = resolveRegionCartography(r.id, 'voyageur');
+      expect(cart.walkablePolygons.length, `Missing walkable valley in ${r.id}`).toBeGreaterThan(0);
+      expect(cart.buildings.length, `Missing buildings in ${r.id}`).toBeGreaterThan(0);
+    }
+
+    const miltonVoyageur = resolveRegionCartography('mountain-town', 'voyageur');
+    const miltonInterloper = resolveRegionCartography('mountain-town', 'interloper');
+
+    // На Незваном госте часть домов в Милтоне сгорает, а тросы снимаются со скал
+    expect(miltonInterloper.intactCount).toBeLessThan(miltonVoyageur.intactCount);
+    expect(miltonInterloper.halfOrRuinedCount).toBeGreaterThan(miltonVoyageur.halfOrRuinedCount);
+    expect(miltonInterloper.deployedRopesCount).toBeLessThan(miltonVoyageur.deployedRopesCount);
+
+    // Ружья и револьверы исчезают с полотна, уступая место спавнам молота/лупы и маршруту ковки
+    expect(
+      miltonVoyageur.microSpawns.some((s) => s.kind === 'rifle' || s.kind === 'revolver'),
+    ).toBe(true);
+    expect(
+      miltonInterloper.microSpawns.some((s) => s.kind === 'rifle' || s.kind === 'revolver'),
+    ).toBe(false);
+    expect(miltonInterloper.microSpawns.some((s) => s.kind === 'interloper_loot')).toBe(true);
+    expect(miltonInterloper.extraPaths.some((p) => p.kind === 'interloper_route')).toBe(true);
+    expect(miltonVoyageur.extraPaths.some((p) => p.kind === 'interloper_route')).toBe(false);
+  });
 });
 
 describe('L3 Command Engine — Everything is a Command', () => {
-  it('executes commands deterministically for visited markers, labels, and custom charcoal notes', () => {
+  it('executes commands deterministically for visited markers, labels, micro-details, and custom charcoal notes', () => {
     const engine = new TldCommandEngine();
     engine.execute('survivor.resetJournal', {});
 
-    expect(engine.getState().showMarkerLabels).toBe(true);
-    engine.execute('map.toggleMarkerLabels', {});
     expect(engine.getState().showMarkerLabels).toBe(false);
+    engine.execute('map.toggleMarkerLabels', {});
+    expect(engine.getState().showMarkerLabels).toBe(true);
+
+    expect(engine.getState().showMapMicroDetails).toBe(true);
+    engine.execute('map.toggleMicroDetails', {});
+    expect(engine.getState().showMapMicroDetails).toBe(false);
 
     engine.execute('survivor.toggleVisited', { markerId: 'ml-camp-office' });
     expect(engine.getState().journal.visitedMarkerIds).toContain('ml-camp-office');

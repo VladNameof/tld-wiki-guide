@@ -27,6 +27,7 @@ export interface AppSessionState {
   readonly mapTheme: MapThemeId;
   readonly enabledCategories: readonly MarkerCategory[];
   readonly showMarkerLabels: boolean;
+  readonly showMapMicroDetails: boolean;
   readonly isDrawingCustomNote: boolean;
   readonly snowEnabled: boolean;
   readonly isSearchModalOpen: boolean;
@@ -47,6 +48,7 @@ export interface CommandPayloads {
   'map.toggleCategory': { readonly category: MarkerCategory };
   'map.setAllCategories': { readonly enabled: boolean };
   'map.toggleMarkerLabels': Record<string, never>;
+  'map.toggleMicroDetails': Record<string, never>;
   'map.setDrawingNoteMode': { readonly active: boolean };
   'ui.toggleSnow': Record<string, never>;
   'ui.setSearchModalOpen': { readonly open: boolean };
@@ -77,7 +79,8 @@ function createInitialState(): AppSessionState {
     difficulty: 'voyageur',
     mapTheme: 'charcoal',
     enabledCategories: ALL_CATEGORY_IDS,
-    showMarkerLabels: true,
+    showMarkerLabels: false,
+    showMapMicroDetails: true,
     isDrawingCustomNote: false,
     snowEnabled: true,
     isSearchModalOpen: false,
@@ -169,6 +172,10 @@ export class TldCommandEngine {
       }
       case 'map.toggleMarkerLabels': {
         next = { ...prev, showMarkerLabels: !prev.showMarkerLabels };
+        break;
+      }
+      case 'map.toggleMicroDetails': {
+        next = { ...prev, showMapMicroDetails: !prev.showMapMicroDetails };
         break;
       }
       case 'map.setDrawingNoteMode': {

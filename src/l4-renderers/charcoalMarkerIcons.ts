@@ -18,19 +18,19 @@ function shortenMarkerLabel(nameRu: string): string {
 function getCategoryPictogramSvg(category: MarkerCategory): string {
   switch (category) {
     case 'shelter':
-      return `<path d="M4 11.5 L12 4.5 L20 11.5 M6.5 10.2 V19.5 H17.5 V10.2" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="M4 11.5 L12 4.5 L20 11.5 M6.5 10.2 V19.5 H17.5 V10.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     case 'loot':
-      return `<path d="M5 18 L18.5 4.5 M14 4.5 H18.5 V9 M6.5 13.5 L10.5 17.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="M5 18 L18.5 4.5 M14 4.5 H18.5 V9 M6.5 13.5 L10.5 17.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     case 'bunker':
-      return `<circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 7 V17 M7 12 H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`;
+      return `<circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="2.1" fill="none"/><path d="M12 7 V17 M7 12 H17" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>`;
     case 'workbench':
-      return `<path d="M4.5 9.5 H19.5 L17.5 14 H14 V18.5 H10 V14 H6.5 Z M7 18.5 H17" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="M4.5 9.5 H19.5 L17.5 14 H14 V18.5 H10 V14 H6.5 Z M7 18.5 H17" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/>`;
     case 'transition':
-      return `<path d="M5 19 V11 C5 6.8 8.1 4.5 12 4.5 C15.9 4.5 19 6.8 19 11 V19 M9.5 14 L12 11.5 L14.5 14 M12 11.5 V19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="M5 19 V11 C5 6.8 8.1 4.5 12 4.5 C15.9 4.5 19 6.8 19 11 V19 M9.5 14 L12 11.5 L14.5 14 M12 11.5 V19" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     case 'wildlife':
-      return `<path d="M6 6 C7 10 9 11 12 11 C15 11 17 10 18 6 M4 8.5 C6 9.5 8 11 8.5 14 L12 19.5 L15.5 14 C16 11 18 9.5 20 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+      return `<path d="M6 6 C7 10 9 11 12 11 C15 11 17 10 18 6 M4 8.5 C6 9.5 8 11 8.5 14 L12 19.5 L15.5 14 C16 11 18 9.5 20 8.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
     case 'climb':
-      return `<path d="M12 3.5 V20.5 M9 7.5 L15 10.5 M9 13 L15 16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>`;
+      return `<path d="M12 3.5 V20.5 M9 7.5 L15 10.5 M9 13 L15 16" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" fill="none"/>`;
   }
 }
 
@@ -46,19 +46,19 @@ export function createCharcoalLeafletIcon(opts: {
   const svgInner = getCategoryPictogramSvg(opts.category);
 
   const borderRing = opts.isFocused
-    ? 'box-shadow: 0 0 0 4px rgba(240, 154, 62, 0.9), 0 6px 16px rgba(0,0,0,0.8); transform: scale(1.16); z-index: 40;'
-    : 'box-shadow: 0 3px 10px rgba(0,0,0,0.68);';
+    ? 'box-shadow: 0 0 0 3.5px rgba(240, 154, 62, 0.95), 0 5px 14px rgba(0,0,0,0.85); transform: scale(1.22); z-index: 40;'
+    : 'box-shadow: 0 2px 7px rgba(0,0,0,0.7);';
 
-  const opacityStyle = opts.isVisited ? 'opacity: 0.65; filter: saturate(0.6);' : '';
+  const opacityStyle = opts.isVisited ? 'opacity: 0.62; filter: saturate(0.55);' : '';
   const visitedBadge = opts.isVisited
-    ? `<span style="position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:999px;background:#3dd68c;color:#082014;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:1.5px solid #121b22;">✓</span>`
+    ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;background:#3dd68c;color:#082014;font-size:8.5px;font-weight:900;display:flex;align-items:center;justify-content:center;border:1.2px solid #121b22;">✓</span>`
     : '';
 
   const labelPill =
     opts.showLabel && opts.labelRu
       ? `<div style="
           position: absolute;
-          top: 35px;
+          top: 28px;
           left: 50%;
           transform: translateX(-50%);
           white-space: nowrap;
@@ -68,7 +68,7 @@ export function createCharcoalLeafletIcon(opts: {
           border-radius: 4px;
           padding: 1px 5px;
           font-family: Inter, sans-serif;
-          font-size: 10px;
+          font-size: 9.5px;
           font-weight: ${opts.isFocused ? '800' : '600'};
           line-height: 1.25;
           pointer-events: none;
@@ -76,15 +76,16 @@ export function createCharcoalLeafletIcon(opts: {
         ">${escHtml(shortenMarkerLabel(opts.labelRu))}</div>`
       : '';
 
+  // Компактный значок (26x26), чтобы не перекрывать прорисованные на полотне улицы, тропинки и домики!
   const html = `
-    <div style="position: relative; width: 34px; height: 34px;">
+    <div style="position: relative; width: 26px; height: 26px;">
       <div style="
         position: relative;
-        width: 34px;
-        height: 34px;
+        width: 26px;
+        height: 26px;
         border-radius: 50% 46% 52% 48%;
-        background: #1b2228;
-        border: 2.4px solid ${meta.colorHex};
+        background: rgba(24, 31, 38, 0.92);
+        border: 2px solid ${meta.colorHex};
         color: ${meta.colorHex};
         display: flex;
         align-items: center;
@@ -93,7 +94,7 @@ export function createCharcoalLeafletIcon(opts: {
         ${borderRing}
         ${opacityStyle}
       ">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">${svgInner}</svg>
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">${svgInner}</svg>
         ${visitedBadge}
       </div>
       ${labelPill}
@@ -103,9 +104,9 @@ export function createCharcoalLeafletIcon(opts: {
   return L.divIcon({
     className: 'tld-charcoal-marker',
     html,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    popupAnchor: [0, -18],
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -14],
   });
 }
 
@@ -116,8 +117,8 @@ export function createCustomNoteLeafletIcon(icon: CustomNoteIcon): L.DivIcon {
 
   const html = `
     <div style="
-      width: 30px;
-      height: 30px;
+      width: 26px;
+      height: 26px;
       border-radius: 6px;
       transform: rotate(-6deg);
       background: #231c14;
@@ -125,19 +126,19 @@ export function createCustomNoteLeafletIcon(icon: CustomNoteIcon): L.DivIcon {
       color: ${color};
       font-family: Oswald, sans-serif;
       font-weight: 700;
-      font-size: 15px;
+      font-size: 13px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.7);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.7);
     ">${glyph}</div>
   `;
 
   return L.divIcon({
     className: 'tld-custom-note-marker',
     html,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -15],
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -13],
   });
 }

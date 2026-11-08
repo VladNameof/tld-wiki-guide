@@ -240,7 +240,7 @@ async function main() {
     mainFiles,
     [],
     'main',
-    'feat: high-detail topographic maps (A1-H8, trails, powerlines, cliffs) & illustrated encyclopedia with 85 photos',
+    'feat(v3): difficulty-reactive charcoal atlas (walkable valleys, streets, buildings, ropes, trails & spawn icons)',
   );
   console.log(`✓ Ветка main обновлена (коммит ${mainSha})`);
 

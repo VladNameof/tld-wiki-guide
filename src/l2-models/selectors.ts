@@ -1,8 +1,13 @@
 import { matchesSearchQuery } from '../l0-primitives/textUtils.ts';
 import type {
+  BuildingDifficultyRule,
   DifficultyId,
   FandomSyncedArticle,
+  MapBuildingFeature,
+  MapExtraPath,
   MapMarkerModel,
+  MapMicroSpawn,
+  MapRopeFeature,
   MarkerCategory,
   RegionModel,
   WikiSectionId,
@@ -15,6 +20,7 @@ import {
 } from './data/encyclopediaData.ts';
 import fandomSeedJson from './data/fandomSynced.json';
 import { MAP_MARKERS_DATA } from './data/markersData.ts';
+import { REGION_CARTOGRAPHY_DATA } from './data/regionCartographyData.ts';
 import { REGIONS_DATA } from './data/regionsData.ts';
 import wikiImagesManifest from './data/wikiImagesManifest.json';
 
@@ -34,6 +40,118 @@ export function getRegionById(regionId: string): RegionModel {
 
 export function getSeededFandomArticles(): readonly FandomSyncedArticle[] {
   return (fandomSeedJson.articles as FandomSyncedArticle[]) ?? [];
+}
+
+export type ResolvedBuildingState = 'intact' | 'random_half' | 'burned_ruin';
+
+export interface ResolvedBuildingItem extends MapBuildingFeature {
+  readonly state: ResolvedBuildingState;
+}
+
+export interface ResolvedRopeItem extends MapRopeFeature {
+  readonly isDeployed: boolean;
+}
+
+export interface ResolvedRegionCartography {
+  readonly difficultyStars: 1 | 2 | 3 | 4 | 5;
+  readonly walkablePolygons: readonly (readonly (readonly [number, number])[])[];
+  readonly buildings: readonly ResolvedBuildingItem[];
+  readonly ropes: readonly ResolvedRopeItem[];
+  readonly extraPaths: readonly MapExtraPath[];
+  readonly microSpawns: readonly MapMicroSpawn[];
+  readonly intactCount: number;
+  readonly halfOrRuinedCount: number;
+  readonly deployedRopesCount: number;
+  readonly totalRopesCount: number;
+}
+
+export function resolveBuildingStateForDifficulty(
+  rule: BuildingDifficultyRule,
+  difficulty: DifficultyId,
+): ResolvedBuildingState {
+  switch (rule) {
+    case 'always_intact':
+      return 'intact';
+    case 'always_ruin':
+      return 'burned_ruin';
+    case 'burns_on_stalker':
+      if (difficulty === 'pilgrim' || difficulty === 'voyageur') return 'intact';
+      return 'burned_ruin';
+    case 'burns_on_interloper':
+      if (difficulty === 'pilgrim' || difficulty === 'voyageur') return 'intact';
+      if (difficulty === 'stalker') return 'random_half';
+      return 'burned_ruin';
+    case 'random_ruin':
+      if (difficulty === 'pilgrim') return 'intact';
+      if (difficulty === 'voyageur' || difficulty === 'stalker') return 'random_half';
+      return 'burned_ruin';
+  }
+}
+
+/**
+ * Reference Oracle: вычисляет состояние построек (целые / полуразрушенные / сгоревшие),
+ * привязанных тросов, тропинок и микро-спавнов региона строго под выбранную сложность.
+ */
+export function resolveRegionCartography(
+  regionId: string,
+  difficulty: DifficultyId,
+): ResolvedRegionCartography {
+  const raw = REGION_CARTOGRAPHY_DATA[regionId];
+  if (!raw) {
+    return {
+      difficultyStars: 2,
+      walkablePolygons: [],
+      buildings: [],
+      ropes: [],
+      extraPaths: [],
+      microSpawns: [],
+      intactCount: 0,
+      halfOrRuinedCount: 0,
+      deployedRopesCount: 0,
+      totalRopesCount: 0,
+    };
+  }
+
+  const lowLoot = isLowLootDifficulty(difficulty);
+
+  const buildings: ResolvedBuildingItem[] = raw.buildings.map((b) => ({
+    ...b,
+    state: resolveBuildingStateForDifficulty(b.rule, difficulty),
+  }));
+
+  const ropes: ResolvedRopeItem[] = raw.ropes.map((r) => ({
+    ...r,
+    isDeployed: r.deployedDifficulties.includes(difficulty),
+  }));
+
+  const extraPaths = raw.extraPaths.filter((p) => !p.onlyLowLoot || lowLoot);
+
+  const microSpawns = raw.microSpawns.filter((sp) => {
+    if (sp.allowedDifficulties && !sp.allowedDifficulties.includes(difficulty)) {
+      return false;
+    }
+    if (difficulty === 'pilgrim' && sp.kind === 'cougar') {
+      return false;
+    }
+    return true;
+  });
+
+  const intactCount = buildings.filter((b) => b.state === 'intact').length;
+  const halfOrRuinedCount = buildings.filter((b) => b.state !== 'intact').length;
+  const deployedRopesCount = ropes.filter((r) => r.isDeployed).length;
+
+  return {
+    difficultyStars: raw.difficultyStars,
+    walkablePolygons: raw.walkablePolygons,
+    buildings,
+    ropes,
+    extraPaths,
+    microSpawns,
+    intactCount,
+    halfOrRuinedCount,
+    deployedRopesCount,
+    totalRopesCount: ropes.length,
+  };
 }
 
 /**

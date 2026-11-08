@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import {
   ArrowRight,
+  Camera,
   CheckCircle2,
   Circle,
   Compass,
@@ -9,6 +10,7 @@ import {
   ExternalLink,
   Filter,
   Globe2,
+  Layers,
   MapPinPlus,
   Navigation,
   RotateCcw,
@@ -16,6 +18,7 @@ import {
   Tag,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import {
   DIFFICULTIES,
@@ -37,6 +40,7 @@ import {
   getRegionById,
   getWikiImageUrl,
   isLowLootDifficulty,
+  resolveRegionCartography,
 } from '../../l2-models/selectors.ts';
 import { commandEngine } from '../../l3-commands/commandRegistry.ts';
 import { buildRegionCharcoalMapDataUrl } from '../../l4-renderers/charcoalMapSvg.ts';
@@ -67,11 +71,17 @@ export function RegionLeafletMap() {
   const [noteBody, setNoteBody] = useState('');
   const [noteIcon, setNoteIcon] = useState<CustomNoteIcon>('stash');
   const [importError, setImportError] = useState<string | null>(null);
+  const [showPolaroid, setShowPolaroid] = useState(true);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const imageOverlayRef = useRef<L.ImageOverlay | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+
+  const cartography = useMemo(
+    () => resolveRegionCartography(region.id, state.difficulty),
+    [region.id, state.difficulty],
+  );
 
   const enabledSet = useMemo(
     () => new Set(state.enabledCategories),
@@ -124,7 +134,7 @@ export function RegionLeafletMap() {
     const map = L.map(container, {
       crs: L.CRS.Simple,
       minZoom: -0.6,
-      maxZoom: 2.5,
+      maxZoom: 3.25,
       zoomSnap: 0.25,
       maxBounds: [
         [-150, -150],
@@ -147,7 +157,7 @@ export function RegionLeafletMap() {
     };
   }, [state.mapViewLevel]);
 
-  // Обновление угольной подложки при смене региона или темы (пергамент / аврора)
+  // Обновление угольной подложки при смене региона, сложности, слоя микро-деталей или темы (пергамент / аврора)
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map || state.mapViewLevel !== 'region') return;
@@ -156,14 +166,27 @@ export function RegionLeafletMap() {
       [0, 0],
       [MAP_CANVAS_SIZE, MAP_CANVAS_SIZE],
     ];
-    const svgUrl = buildRegionCharcoalMapDataUrl(region, state.mapTheme);
+    const svgUrl = buildRegionCharcoalMapDataUrl({
+      region,
+      theme: state.mapTheme,
+      difficulty: state.difficulty,
+      cartography,
+      showMicroDetails: state.showMapMicroDetails,
+    });
 
     if (imageOverlayRef.current) {
       imageOverlayRef.current.setUrl(svgUrl);
     } else {
       imageOverlayRef.current = L.imageOverlay(svgUrl, bounds).addTo(map);
     }
-  }, [region, state.mapTheme, state.mapViewLevel]);
+  }, [
+    region,
+    state.mapTheme,
+    state.difficulty,
+    cartography,
+    state.showMapMicroDetails,
+    state.mapViewLevel,
+  ]);
 
   // Обработка клика и движения курсора по карте (живой квадрат сетки A1..H8)
   useEffect(() => {
@@ -323,7 +346,7 @@ export function RegionLeafletMap() {
   };
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-6">
+    <section className="mx-auto max-w-[1440px] px-4 py-6">
       {/* Верхняя панель управления картографией и сложностью */}
       <div className="mb-5 rounded-xl border border-[#2a3b4c] bg-[#111a22] p-4 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -376,21 +399,37 @@ export function RegionLeafletMap() {
             )}
           </div>
 
-          {/* Переключатели подписей локаций и визуального стиля карты */}
+          {/* Переключатели деталей полотна, подписей локаций и визуального стиля карты */}
           <div className="flex flex-wrap items-center gap-2">
             {state.mapViewLevel === 'region' && (
-              <button
-                type="button"
-                onClick={() => executeCommand('map.toggleMarkerLabels', {})}
-                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                  state.showMarkerLabels
-                    ? 'border-[#d97724]/60 bg-[#d97724]/15 text-[#ffd699]'
-                    : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
-                }`}
-              >
-                <Tag className="h-3.5 w-3.5 text-[#f09a3e]" />
-                Подписи локаций: {state.showMarkerLabels ? 'Вкл' : 'Скрыты'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => executeCommand('map.toggleMicroDetails', {})}
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                    state.showMapMicroDetails
+                      ? 'border-emerald-500/50 bg-emerald-950/35 text-emerald-200'
+                      : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
+                  }`}
+                  title="Показать или скрыть мелкие иконки животных, трав, саженцев и лута на самом холсте карты"
+                >
+                  <Layers className="h-3.5 w-3.5 text-emerald-400" />
+                  Фауна / Травы / Лут: {state.showMapMicroDetails ? 'Вкл' : 'Скрыты'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => executeCommand('map.toggleMarkerLabels', {})}
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                    state.showMarkerLabels
+                      ? 'border-[#d97724]/60 bg-[#d97724]/15 text-[#ffd699]'
+                      : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
+                  }`}
+                >
+                  <Tag className="h-3.5 w-3.5 text-[#f09a3e]" />
+                  Плашки маркеров: {state.showMarkerLabels ? 'Вкл' : 'Скрыты'}
+                </button>
+              </>
             )}
 
             <button
@@ -413,7 +452,7 @@ export function RegionLeafletMap() {
           </div>
         </div>
 
-        {/* Переключатель уровня сложности с адаптацией лута */}
+        {/* Переключатель уровня сложности с живой сводкой построек, тросов, троп и лута */}
         <div className="mt-4 border-t border-[#1e2c3a] pt-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -449,17 +488,40 @@ export function RegionLeafletMap() {
               })}
             </div>
 
-            <div className="text-xs text-[#9cb0c2]">
-              {isLowLootDifficulty(state.difficulty) ? (
-                <span className="text-rose-300">
-                  ⚠️ Ружья/револьверы скрыты; показаны таблицы спичек, молота, лупы и угля!
+            {state.mapViewLevel === 'region' ? (
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="rounded border border-[#2a3c4f] bg-[#0c141c] px-2 py-0.5 text-[#e4dfd5]">
+                  🏠 Целых построек: <strong className="text-emerald-300">{cartography.intactCount}</strong>
                 </span>
-              ) : (
-                <span>
-                  ✓ Огнестрельное оружие, бункеры выживальщиков и полный пул лута активны
+                <span className="rounded border border-[#2a3c4f] bg-[#0c141c] px-2 py-0.5 text-[#e4dfd5]">
+                  🏚️ Сгорело / руин: <strong className="text-rose-300">{cartography.halfOrRuinedCount}</strong>
                 </span>
-              )}
-            </div>
+                <span className="rounded border border-[#2a3c4f] bg-[#0c141c] px-2 py-0.5 text-[#e4dfd5]">
+                  🪢 Тросы: <strong className="text-amber-300">{cartography.deployedRopesCount}/{cartography.totalRopesCount}</strong>
+                </span>
+                {isLowLootDifficulty(state.difficulty) ? (
+                  <span className="rounded border border-rose-500/40 bg-rose-950/40 px-2 py-0.5 text-rose-200">
+                    🔥 Путь ковки + спавн ★ молота/лупы (огнестрел снят)
+                  </span>
+                ) : (
+                  <span className="rounded border border-sky-500/35 bg-sky-950/35 px-2 py-0.5 text-sky-200">
+                    🎯 Ружья, револьверы и бункеры на полотне
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-[#9cb0c2]">
+                {isLowLootDifficulty(state.difficulty) ? (
+                  <span className="text-rose-300">
+                    ⚠️ Ружья/револьверы скрыты; показаны таблицы спичек, молота, лупы и угля!
+                  </span>
+                ) : (
+                  <span>
+                    ✓ Огнестрельное оружие, бункеры выживальщиков и полный пул лута активны
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -665,13 +727,50 @@ export function RegionLeafletMap() {
                     </span>
                   </>
                 ) : (
-                  <span className="text-[#9cb0c2]">Сетка ориентирования A1–H8 • Колесо мыши — зум</span>
+                  <span className="text-[#9cb0c2]">Сетка A1–H8 • Колесо мыши — глубокий зум до улиц</span>
                 )}
               </div>
 
+              {/* Приклеенный скотчем снимок Polaroid региона (в стиле атласа выжившего) */}
+              {regionImg && (
+                <div className="absolute right-3 bottom-12 z-[450] hidden sm:block">
+                  {showPolaroid ? (
+                    <div className="relative w-40 -rotate-2 rounded-sm border border-[#7c6a53] bg-[#efe5cf] p-1.5 pb-2 shadow-2xl transition hover:rotate-0">
+                      {/* Полоска малярного скотча сверху */}
+                      <div className="pointer-events-none absolute -top-2 left-1/2 h-3.5 w-14 -translate-x-1/2 rotate-2 rounded-[1px] border border-[#b59257]/60 bg-[#dfc184]/85 shadow-sm" />
+                      <button
+                        type="button"
+                        onClick={() => setShowPolaroid(false)}
+                        title="Свернуть снимок"
+                        className="absolute top-2 right-2 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/65 text-white hover:bg-black"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <img
+                        src={regionImg}
+                        alt={region.nameRu}
+                        className="h-24 w-full rounded-[1px] border border-[#8c7a64] object-cover contrast-105 sepia-[.18]"
+                      />
+                      <div className="mt-1 truncate text-center font-tld-display text-[10px] font-bold tracking-wide text-[#2a2118] uppercase">
+                        {region.nameRu}
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowPolaroid(true)}
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#3a4f63] bg-[#0b1219]/90 px-2.5 py-1 text-[11px] font-semibold text-[#ffd699] shadow hover:border-[#d97724]"
+                    >
+                      <Camera className="h-3.5 w-3.5 text-[#f09a3e]" />
+                      Снимок
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div
                 ref={mapContainerRef}
-                className={`h-[540px] w-full sm:h-[620px] ${
+                className={`h-[560px] w-full sm:h-[680px] ${
                   state.isDrawingCustomNote ? 'cursor-crosshair' : ''
                 }`}
               />

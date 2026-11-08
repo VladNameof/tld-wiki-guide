@@ -102,6 +102,103 @@ export interface RegionExitBanner {
   readonly targetRegionId?: string;
 }
 
+export type BuildingArchKind =
+  | 'landmark'
+  | 'house'
+  | 'cabin'
+  | 'trailer'
+  | 'barn'
+  | 'industrial'
+  | 'fishing_hut'
+  | 'tower'
+  | 'cave'
+  | 'bunker';
+
+export type BuildingDifficultyRule =
+  | 'always_intact'
+  | 'burns_on_interloper'
+  | 'burns_on_stalker'
+  | 'random_ruin'
+  | 'always_ruin';
+
+export interface MapBuildingFeature {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: BuildingArchKind;
+  readonly rule: BuildingDifficultyRule;
+  readonly rotDeg?: number;
+  readonly scale?: number;
+  readonly hasStove?: boolean;
+  readonly labelRu?: string;
+}
+
+export type MapPathKind =
+  | 'highway'
+  | 'dirt_road'
+  | 'railway'
+  | 'trail'
+  | 'goat_path'
+  | 'bridge'
+  | 'log_bridge'
+  | 'interloper_route';
+
+export interface MapExtraPath {
+  readonly kind: MapPathKind;
+  readonly points: readonly (readonly [number, number])[];
+  /** Показывать только на низком луте (Незваный гость / Страдания) как маршрут выживания */
+  readonly onlyLowLoot?: boolean;
+  readonly labelRu?: string;
+}
+
+export interface MapRopeFeature {
+  readonly top: readonly [number, number];
+  readonly bottom: readonly [number, number];
+  /** На каких сложностях трос уже висит привязанным с начала игры */
+  readonly deployedDifficulties: readonly DifficultyId[];
+  readonly labelRu?: string;
+}
+
+export type MapMicroSpawnKind =
+  | 'wolf'
+  | 'timberwolf'
+  | 'bear'
+  | 'moose'
+  | 'cougar'
+  | 'deer'
+  | 'rabbit'
+  | 'ptarmigan'
+  | 'carcass'
+  | 'corpse'
+  | 'reishi'
+  | 'rosehip'
+  | 'lichen'
+  | 'cattail'
+  | 'maple'
+  | 'birch'
+  | 'rifle'
+  | 'revolver'
+  | 'interloper_loot'
+  | 'safe';
+
+export interface MapMicroSpawn {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: MapMicroSpawnKind;
+  /** Если задано — спавнится только на перечисленных сложностях */
+  readonly allowedDifficulties?: readonly DifficultyId[];
+}
+
+export interface RegionCartographyConfig {
+  readonly regionId: string;
+  readonly difficultyStars: 1 | 2 | 3 | 4 | 5;
+  /** Контуры доступной для ходьбы территории (долины, каньоны, плато, лёд) в координатах 0..1000 */
+  readonly walkablePolygons: readonly (readonly (readonly [number, number])[])[];
+  readonly buildings: readonly MapBuildingFeature[];
+  readonly ropes: readonly MapRopeFeature[];
+  readonly extraPaths: readonly MapExtraPath[];
+  readonly microSpawns: readonly MapMicroSpawn[];
+}
+
 export interface RegionModel {
   readonly id: string;
   readonly imageKey: string;
