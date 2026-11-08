@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@layer base {
+  :root {
+    --font-display: 'Oswald', system-ui, sans-serif;
+    --font-journal: 'Cormorant Garamond', Georgia, serif;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #0b1116;
+    color: #e4dfd5;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, .font-tld-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.03em;
+  }
+
+  .font-tld-journal {
+    font-family: var(--font-journal);
+  }
+}
+
+/* Стилизация контейнера и всплывающих карточек Leaflet в духе дневника выжившего */
+.leaflet-container {
+  background: #10171d !important;
+  font-family: var(--font-sans) !important;
+}
+
+.tld-charcoal-marker,
+.tld-custom-note-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(18, 27, 34, 0.97) !important;
+  color: #e4dfd5 !important;
+  border: 1px solid rgba(217, 119, 36, 0.55) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.8) !important;
+  backdrop-filter: blur(8px);
+}
+
+.leaflet-popup-tip {
+  background: rgba(18, 27, 34, 0.97) !important;
+  border: 1px solid rgba(217, 119, 36, 0.45) !important;
+}
+
+.leaflet-popup-close-button {
+  color: #9fb0bf !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: #16212b !important;
+  color: #e4dfd5 !important;
+  border-color: #2b3c4d !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #223240 !important;
+  color: #f09a3e !important;
+}
+
+/* Тонкий скроллбар в холодных тонах */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b1116;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #273644;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b5166;
+}
