@@ -8,6 +8,7 @@ import type {
   MapMarkerModel,
   MapMicroSpawn,
   MapRopeFeature,
+  MapSubLocationLabel,
   MarkerCategory,
   RegionModel,
   WikiSectionId,
@@ -20,6 +21,7 @@ import {
 } from './data/encyclopediaData.ts';
 import fandomSeedJson from './data/fandomSynced.json';
 import { MAP_MARKERS_DATA } from './data/markersData.ts';
+import { REGION_ATLAS_ENRICHMENT } from './data/regionAtlasEnrichmentData.ts';
 import { REGION_CARTOGRAPHY_DATA } from './data/regionCartographyData.ts';
 import { REGIONS_DATA } from './data/regionsData.ts';
 import wikiImagesManifest from './data/wikiImagesManifest.json';
@@ -59,6 +61,7 @@ export interface ResolvedRegionCartography {
   readonly ropes: readonly ResolvedRopeItem[];
   readonly extraPaths: readonly MapExtraPath[];
   readonly microSpawns: readonly MapMicroSpawn[];
+  readonly subLocations: readonly MapSubLocationLabel[];
   readonly intactCount: number;
   readonly halfOrRuinedCount: number;
   readonly deployedRopesCount: number;
@@ -105,6 +108,7 @@ export function resolveRegionCartography(
       ropes: [],
       extraPaths: [],
       microSpawns: [],
+      subLocations: [],
       intactCount: 0,
       halfOrRuinedCount: 0,
       deployedRopesCount: 0,
@@ -113,28 +117,55 @@ export function resolveRegionCartography(
   }
 
   const lowLoot = isLowLootDifficulty(difficulty);
+  const enrich = REGION_ATLAS_ENRICHMENT[regionId];
 
-  const buildings: ResolvedBuildingItem[] = raw.buildings.map((b) => ({
-    ...b,
-    state: resolveBuildingStateForDifficulty(b.rule, difficulty),
-  }));
+  const allRawBuildings = [
+    ...raw.buildings,
+    ...(enrich?.extraBuildings ?? []),
+  ];
+
+  const buildings: ResolvedBuildingItem[] = allRawBuildings.map((b) => {
+    const extraAmenities = b.labelRu ? enrich?.amenitiesByLabel?.[b.labelRu] : undefined;
+    return {
+      ...b,
+      amenities: b.amenities ?? extraAmenities,
+      state: resolveBuildingStateForDifficulty(b.rule, difficulty),
+    };
+  });
 
   const ropes: ResolvedRopeItem[] = raw.ropes.map((r) => ({
     ...r,
     isDeployed: r.deployedDifficulties.includes(difficulty),
   }));
 
-  const extraPaths = raw.extraPaths.filter((p) => !p.onlyLowLoot || lowLoot);
+  const allExtraPaths = [
+    ...raw.extraPaths,
+    ...(enrich?.extraPaths ?? []),
+  ];
+  const extraPaths = allExtraPaths.filter((p) => !p.onlyLowLoot || lowLoot);
 
-  const microSpawns = raw.microSpawns.filter((sp) => {
+  const allMicroSpawns = [
+    ...raw.microSpawns,
+    ...(enrich?.extraSpawns ?? []),
+  ];
+
+  const microSpawns = allMicroSpawns.filter((sp) => {
     if (sp.allowedDifficulties && !sp.allowedDifficulties.includes(difficulty)) {
       return false;
     }
     if (difficulty === 'pilgrim' && sp.kind === 'cougar') {
       return false;
     }
+    if (lowLoot && sp.kind === 'bow' && !sp.allowedDifficulties) {
+      return false;
+    }
     return true;
   });
+
+  const subLocations = [
+    ...(raw.subLocations ?? []),
+    ...(enrich?.subLocations ?? []),
+  ];
 
   const intactCount = buildings.filter((b) => b.state === 'intact').length;
   const halfOrRuinedCount = buildings.filter((b) => b.state !== 'intact').length;
@@ -147,6 +178,7 @@ export function resolveRegionCartography(
     ropes,
     extraPaths,
     microSpawns,
+    subLocations,
     intactCount,
     halfOrRuinedCount,
     deployedRopesCount,

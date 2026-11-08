@@ -184,6 +184,8 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
       const cart = resolveRegionCartography(r.id, 'voyageur');
       expect(cart.walkablePolygons.length, `Missing walkable valley in ${r.id}`).toBeGreaterThan(0);
       expect(cart.buildings.length, `Missing buildings in ${r.id}`).toBeGreaterThan(0);
+      expect(cart.subLocations.length, `Missing subLocations in ${r.id}`).toBeGreaterThanOrEqual(5);
+      expect(cart.microSpawns.length, `Too few microSpawns in ${r.id}`).toBeGreaterThanOrEqual(25);
     }
 
     const miltonVoyageur = resolveRegionCartography('mountain-town', 'voyageur');
@@ -194,12 +196,16 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
     expect(miltonInterloper.halfOrRuinedCount).toBeGreaterThan(miltonVoyageur.halfOrRuinedCount);
     expect(miltonInterloper.deployedRopesCount).toBeLessThan(miltonVoyageur.deployedRopesCount);
 
-    // Ружья и револьверы исчезают с полотна, уступая место спавнам молота/лупы и маршруту ковки
+    // Ружья, револьверы и готовые луки исчезают с полотна, уступая место спавнам молота/лупы и маршруту ковки
     expect(
-      miltonVoyageur.microSpawns.some((s) => s.kind === 'rifle' || s.kind === 'revolver'),
+      miltonVoyageur.microSpawns.some(
+        (s) => s.kind === 'rifle' || s.kind === 'revolver' || s.kind === 'bow',
+      ),
     ).toBe(true);
     expect(
-      miltonInterloper.microSpawns.some((s) => s.kind === 'rifle' || s.kind === 'revolver'),
+      miltonInterloper.microSpawns.some(
+        (s) => s.kind === 'rifle' || s.kind === 'revolver' || s.kind === 'bow',
+      ),
     ).toBe(false);
     expect(miltonInterloper.microSpawns.some((s) => s.kind === 'interloper_loot')).toBe(true);
     expect(miltonInterloper.extraPaths.some((p) => p.kind === 'interloper_route')).toBe(true);
@@ -208,7 +214,7 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
 });
 
 describe('L3 Command Engine — Everything is a Command', () => {
-  it('executes commands deterministically for visited markers, labels, micro-details, and custom charcoal notes', () => {
+  it('executes commands deterministically for visited markers, labels, canvas layers, and custom charcoal notes', () => {
     const engine = new TldCommandEngine();
     engine.execute('survivor.resetJournal', {});
 
@@ -217,8 +223,14 @@ describe('L3 Command Engine — Everything is a Command', () => {
     expect(engine.getState().showMarkerLabels).toBe(true);
 
     expect(engine.getState().showMapMicroDetails).toBe(true);
-    engine.execute('map.toggleMicroDetails', {});
+    expect(engine.getState().canvasLayers.floraAndSaplings).toBe(true);
+    engine.execute('map.toggleCanvasLayer', { layer: 'floraAndSaplings' });
+    expect(engine.getState().canvasLayers.floraAndSaplings).toBe(false);
+    expect(engine.getState().showMapMicroDetails).toBe(true);
+
+    engine.execute('map.setAllCanvasLayers', { enabled: false });
     expect(engine.getState().showMapMicroDetails).toBe(false);
+    expect(engine.getState().canvasLayers.buildingsAndSublocs).toBe(false);
 
     engine.execute('survivor.toggleVisited', { markerId: 'ml-camp-office' });
     expect(engine.getState().journal.visitedMarkerIds).toContain('ml-camp-office');

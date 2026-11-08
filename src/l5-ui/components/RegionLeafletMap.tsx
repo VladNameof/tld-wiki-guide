@@ -43,12 +43,16 @@ import {
   resolveRegionCartography,
 } from '../../l2-models/selectors.ts';
 import { commandEngine } from '../../l3-commands/commandRegistry.ts';
-import { buildRegionCharcoalMapDataUrl } from '../../l4-renderers/charcoalMapSvg.ts';
+import {
+  buildRegionCharcoalMapDataUrl,
+  MAP_SVG_LEAFLET_BOUNDS,
+} from '../../l4-renderers/charcoalMapSvg.ts';
 import {
   createCharcoalLeafletIcon,
   createCustomNoteLeafletIcon,
 } from '../../l4-renderers/charcoalMarkerIcons.ts';
 import { executeCommand, useCommandState } from '../hooks/useCommandState.ts';
+import { AtlasLegendPanel } from './AtlasLegendPanel.tsx';
 import { WorldIslandMap } from './WorldIslandMap.tsx';
 
 interface PendingNoteCoords {
@@ -126,24 +130,24 @@ export function RegionLeafletMap() {
     const container = mapContainerRef.current;
     if (!container) return;
 
-    const bounds: L.LatLngBoundsExpression = [
-      [0, 0],
-      [MAP_CANVAS_SIZE, MAP_CANVAS_SIZE],
+    const sheetBounds: L.LatLngBoundsExpression = [
+      [MAP_SVG_LEAFLET_BOUNDS[0][0], MAP_SVG_LEAFLET_BOUNDS[0][1]],
+      [MAP_SVG_LEAFLET_BOUNDS[1][0], MAP_SVG_LEAFLET_BOUNDS[1][1]],
     ];
 
     const map = L.map(container, {
       crs: L.CRS.Simple,
-      minZoom: -0.6,
-      maxZoom: 3.25,
+      minZoom: -0.8,
+      maxZoom: 3.5,
       zoomSnap: 0.25,
       maxBounds: [
-        [-150, -150],
-        [MAP_CANVAS_SIZE + 150, MAP_CANVAS_SIZE + 150],
+        [-290, -180],
+        [MAP_CANVAS_SIZE + 180, MAP_CANVAS_SIZE + 180],
       ],
       attributionControl: false,
     });
 
-    map.fitBounds(bounds);
+    map.fitBounds(sheetBounds);
     const layerGroup = L.layerGroup().addTo(map);
 
     leafletMapRef.current = map;
@@ -157,14 +161,14 @@ export function RegionLeafletMap() {
     };
   }, [state.mapViewLevel]);
 
-  // Обновление угольной подложки при смене региона, сложности, слоя микро-деталей или темы (пергамент / аврора)
+  // Обновление угольной подложки при смене региона, сложности, слоёв полотна или темы (пергамент / аврора)
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map || state.mapViewLevel !== 'region') return;
 
-    const bounds: L.LatLngBoundsExpression = [
-      [0, 0],
-      [MAP_CANVAS_SIZE, MAP_CANVAS_SIZE],
+    const sheetBounds: L.LatLngBoundsExpression = [
+      [MAP_SVG_LEAFLET_BOUNDS[0][0], MAP_SVG_LEAFLET_BOUNDS[0][1]],
+      [MAP_SVG_LEAFLET_BOUNDS[1][0], MAP_SVG_LEAFLET_BOUNDS[1][1]],
     ];
     const svgUrl = buildRegionCharcoalMapDataUrl({
       region,
@@ -172,12 +176,13 @@ export function RegionLeafletMap() {
       difficulty: state.difficulty,
       cartography,
       showMicroDetails: state.showMapMicroDetails,
+      canvasLayers: state.canvasLayers,
     });
 
     if (imageOverlayRef.current) {
       imageOverlayRef.current.setUrl(svgUrl);
     } else {
-      imageOverlayRef.current = L.imageOverlay(svgUrl, bounds).addTo(map);
+      imageOverlayRef.current = L.imageOverlay(svgUrl, sheetBounds).addTo(map);
     }
   }, [
     region,
@@ -185,6 +190,7 @@ export function RegionLeafletMap() {
     state.difficulty,
     cartography,
     state.showMapMicroDetails,
+    state.canvasLayers,
     state.mapViewLevel,
   ]);
 
@@ -770,7 +776,7 @@ export function RegionLeafletMap() {
 
               <div
                 ref={mapContainerRef}
-                className={`h-[560px] w-full sm:h-[680px] ${
+                className={`h-[600px] w-full sm:h-[720px] ${
                   state.isDrawingCustomNote ? 'cursor-crosshair' : ''
                 }`}
               />
@@ -833,6 +839,9 @@ export function RegionLeafletMap() {
                 </div>
               </form>
             )}
+
+            {/* Полная интерактивная легенда (48 условных знаков + выключатели 5 слоёв полотна) */}
+            <AtlasLegendPanel />
 
             {/* Штурманская карточка ориентирования по региону + реальное фото локации */}
             <div className="overflow-hidden rounded-xl border border-[#2a3b4c] bg-[#121b24] shadow-lg">

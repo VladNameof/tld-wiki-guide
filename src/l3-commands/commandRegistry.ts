@@ -1,6 +1,8 @@
 import { MARKER_CATEGORIES } from '../l0-primitives/constants.ts';
 import { clampMapCoord } from '../l0-primitives/textUtils.ts';
 import type {
+  CanvasDetailLayers,
+  CanvasLayerKey,
   CustomCharcoalNote,
   CustomNoteIcon,
   DifficultyId,
@@ -28,6 +30,7 @@ export interface AppSessionState {
   readonly enabledCategories: readonly MarkerCategory[];
   readonly showMarkerLabels: boolean;
   readonly showMapMicroDetails: boolean;
+  readonly canvasLayers: CanvasDetailLayers;
   readonly isDrawingCustomNote: boolean;
   readonly snowEnabled: boolean;
   readonly isSearchModalOpen: boolean;
@@ -49,6 +52,8 @@ export interface CommandPayloads {
   'map.setAllCategories': { readonly enabled: boolean };
   'map.toggleMarkerLabels': Record<string, never>;
   'map.toggleMicroDetails': Record<string, never>;
+  'map.toggleCanvasLayer': { readonly layer: CanvasLayerKey };
+  'map.setAllCanvasLayers': { readonly enabled: boolean };
   'map.setDrawingNoteMode': { readonly active: boolean };
   'ui.toggleSnow': Record<string, never>;
   'ui.setSearchModalOpen': { readonly open: boolean };
@@ -70,6 +75,22 @@ export type CommandId = keyof CommandPayloads;
 
 const ALL_CATEGORY_IDS = MARKER_CATEGORIES.map((c) => c.id);
 
+const ALL_CANVAS_LAYERS_ON: CanvasDetailLayers = {
+  buildingsAndSublocs: true,
+  ropesAndRoutes: true,
+  faunaAndCarcasses: true,
+  floraAndSaplings: true,
+  lootAndStations: true,
+};
+
+const ALL_CANVAS_LAYERS_OFF: CanvasDetailLayers = {
+  buildingsAndSublocs: false,
+  ropesAndRoutes: false,
+  faunaAndCarcasses: false,
+  floraAndSaplings: false,
+  lootAndStations: false,
+};
+
 function createInitialState(): AppSessionState {
   return {
     activeSection: 'home',
@@ -81,6 +102,7 @@ function createInitialState(): AppSessionState {
     enabledCategories: ALL_CATEGORY_IDS,
     showMarkerLabels: false,
     showMapMicroDetails: true,
+    canvasLayers: ALL_CANVAS_LAYERS_ON,
     isDrawingCustomNote: false,
     snowEnabled: true,
     isSearchModalOpen: false,
@@ -175,7 +197,41 @@ export class TldCommandEngine {
         break;
       }
       case 'map.toggleMicroDetails': {
-        next = { ...prev, showMapMicroDetails: !prev.showMapMicroDetails };
+        const nextMicro = !prev.showMapMicroDetails;
+        next = {
+          ...prev,
+          showMapMicroDetails: nextMicro,
+          canvasLayers: {
+            ...prev.canvasLayers,
+            faunaAndCarcasses: nextMicro,
+            floraAndSaplings: nextMicro,
+            lootAndStations: nextMicro,
+          },
+        };
+        break;
+      }
+      case 'map.toggleCanvasLayer': {
+        const p = payload as CommandPayloads['map.toggleCanvasLayer'];
+        const updated: CanvasDetailLayers = {
+          ...prev.canvasLayers,
+          [p.layer]: !prev.canvasLayers[p.layer],
+        };
+        const anyMicro =
+          updated.faunaAndCarcasses || updated.floraAndSaplings || updated.lootAndStations;
+        next = {
+          ...prev,
+          canvasLayers: updated,
+          showMapMicroDetails: anyMicro,
+        };
+        break;
+      }
+      case 'map.setAllCanvasLayers': {
+        const p = payload as CommandPayloads['map.setAllCanvasLayers'];
+        next = {
+          ...prev,
+          canvasLayers: p.enabled ? ALL_CANVAS_LAYERS_ON : ALL_CANVAS_LAYERS_OFF,
+          showMapMicroDetails: p.enabled,
+        };
         break;
       }
       case 'map.setDrawingNoteMode': {

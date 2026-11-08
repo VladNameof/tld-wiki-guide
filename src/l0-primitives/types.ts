@@ -121,6 +121,16 @@ export type BuildingDifficultyRule =
   | 'random_ruin'
   | 'always_ruin';
 
+export type BuildingAmenityKind =
+  | 'bed'
+  | 'stove'
+  | 'fire_barrel'
+  | 'workbench'
+  | 'forge'
+  | 'ammo_bench'
+  | 'safe'
+  | 'first_aid';
+
 export interface MapBuildingFeature {
   readonly x: number;
   readonly y: number;
@@ -129,6 +139,7 @@ export interface MapBuildingFeature {
   readonly rotDeg?: number;
   readonly scale?: number;
   readonly hasStove?: boolean;
+  readonly amenities?: readonly BuildingAmenityKind[];
   readonly labelRu?: string;
 }
 
@@ -140,6 +151,8 @@ export type MapPathKind =
   | 'goat_path'
   | 'bridge'
   | 'log_bridge'
+  | 'waterfall'
+  | 'fence'
   | 'interloper_route';
 
 export interface MapExtraPath {
@@ -173,12 +186,26 @@ export type MapMicroSpawnKind =
   | 'rosehip'
   | 'lichen'
   | 'cattail'
+  | 'burdock'
+  | 'acorns'
   | 'maple'
   | 'birch'
   | 'rifle'
   | 'revolver'
+  | 'bow'
   | 'interloper_loot'
-  | 'safe';
+  | 'safe'
+  | 'start_spawn'
+  | 'small_cave'
+  | 'fishing'
+  | 'workbench'
+  | 'forge'
+  | 'bed'
+  | 'fire_barrel'
+  | 'first_aid'
+  | 'tools'
+  | 'backpack'
+  | 'coal';
 
 export interface MapMicroSpawn {
   readonly x: number;
@@ -187,6 +214,22 @@ export interface MapMicroSpawn {
   /** Если задано — спавнится только на перечисленных сложностях */
   readonly allowedDifficulties?: readonly DifficultyId[];
 }
+
+export interface MapSubLocationLabel {
+  readonly x: number;
+  readonly y: number;
+  readonly labelRu: string;
+}
+
+export interface CanvasDetailLayers {
+  readonly buildingsAndSublocs: boolean;
+  readonly ropesAndRoutes: boolean;
+  readonly faunaAndCarcasses: boolean;
+  readonly floraAndSaplings: boolean;
+  readonly lootAndStations: boolean;
+}
+
+export type CanvasLayerKey = keyof CanvasDetailLayers;
 
 export interface RegionCartographyConfig {
   readonly regionId: string;
@@ -197,6 +240,7 @@ export interface RegionCartographyConfig {
   readonly ropes: readonly MapRopeFeature[];
   readonly extraPaths: readonly MapExtraPath[];
   readonly microSpawns: readonly MapMicroSpawn[];
+  readonly subLocations?: readonly MapSubLocationLabel[];
 }
 
 export interface RegionModel {

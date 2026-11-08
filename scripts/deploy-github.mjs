@@ -240,7 +240,7 @@ async function main() {
     mainFiles,
     [],
     'main',
-    'feat(v3): difficulty-reactive charcoal atlas (walkable valleys, streets, buildings, ropes, trails & spawn icons)',
+    'feat(v4): ultra-detailed 2.4K survey atlas, sub-locations, station badges & full 47-symbol legend',
   );
   console.log(`✓ Ветка main обновлена (коммит ${mainSha})`);
 

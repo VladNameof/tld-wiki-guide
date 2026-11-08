@@ -843,7 +843,7 @@ export const REGION_CARTOGRAPHY_DATA: Readonly<Record<string, RegionCartographyC
       { x: 765, y: 775, kind: 'trailer', rule: 'always_intact' },
       { x: 225, y: 315, kind: 'cabin', rule: 'always_intact', hasStove: true, labelRu: 'ХИЖИНА НА ОТШИБЕ' },
       { x: 645, y: 595, kind: 'tower', rule: 'always_intact', hasStove: true, labelRu: 'ВЫШКА ЗАМОРСКАЯ' },
-      { x: 825, y: 285, kind: 'lighthouse' as 'tower', rule: 'always_intact', labelRu: 'УПАВШИЙ МАЯК' },
+      { x: 825, y: 285, kind: 'tower', rule: 'always_intact', labelRu: 'УПАВШИЙ МАЯК' },
       { x: 355, y: 285, kind: 'fishing_hut', rule: 'always_intact' },
       { x: 265, y: 745, kind: 'cave', rule: 'always_intact' },
     ],
