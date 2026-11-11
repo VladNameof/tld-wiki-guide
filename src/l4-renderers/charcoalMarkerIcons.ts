@@ -110,6 +110,42 @@ export function createCharcoalLeafletIcon(opts: {
   });
 }
 
+export function createStreetViewNodeLeafletIcon(opts: {
+  readonly isActive: boolean;
+  readonly headingDeg: number;
+}): L.DivIcon {
+  const glow = opts.isActive
+    ? 'box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.55), 0 4px 12px rgba(2, 132, 199, 0.9); transform: scale(1.22);'
+    : 'box-shadow: 0 2px 8px rgba(0, 0, 0, 0.72);';
+
+  const html = `
+    <div style="
+      position: relative;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      border: 2px solid #e0f2fe;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      ${glow}
+    ">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="transform: rotate(${opts.headingDeg}deg);">
+        <path d="M12 3 L17.5 17.5 L12 14.2 L6.5 17.5 Z" fill="#ffffff" />
+      </svg>
+    </div>
+  `;
+
+  return L.divIcon({
+    className: 'tld-streetview-node',
+    html,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
+  });
+}
+
 export function createCustomNoteLeafletIcon(icon: CustomNoteIcon): L.DivIcon {
   const glyph =
     icon === 'danger' ? '!' : icon === 'camp' ? '🔥' : icon === 'arrow' ? '➤' : '✕';

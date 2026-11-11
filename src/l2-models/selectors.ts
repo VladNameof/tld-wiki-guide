@@ -11,6 +11,7 @@ import type {
   MapSubLocationLabel,
   MarkerCategory,
   RegionModel,
+  StreetViewNode,
   WikiSectionId,
 } from '../l0-primitives/types.ts';
 import {
@@ -20,10 +21,16 @@ import {
   WILDLIFE_ENTRIES,
 } from './data/encyclopediaData.ts';
 import fandomSeedJson from './data/fandomSynced.json';
+import {
+  LEOPARDTRIX_VIDEO_GUIDES,
+  type LeopardTrixVideoGuide,
+} from './data/leopardTrixGuidesData.ts';
 import { MAP_MARKERS_DATA } from './data/markersData.ts';
 import { REGION_ATLAS_ENRICHMENT } from './data/regionAtlasEnrichmentData.ts';
 import { REGION_CARTOGRAPHY_DATA } from './data/regionCartographyData.ts';
 import { REGIONS_DATA } from './data/regionsData.ts';
+import { STREET_VIEW_NODES } from './data/streetViewData.ts';
+import streetViewVideoMetaJson from './data/streetViewVideoMeta.json';
 import wikiImagesManifest from './data/wikiImagesManifest.json';
 
 const IMAGE_MANIFEST = wikiImagesManifest as Readonly<Record<string, string>>;
@@ -401,5 +408,83 @@ export function searchLocalEncyclopedia(query: string): GlobalSearchHit[] {
     }
   }
 
+  for (const sv of STREET_VIEW_NODES) {
+    if (matchesSearchQuery(query, sv.titleRu, sv.titleEn, sv.routeTitleRu, sv.descriptionRu)) {
+      hits.push({
+        id: `sv-${sv.id}`,
+        titleRu: `🚶 ${sv.titleRu}`,
+        subtitleRu: sv.routeTitleRu,
+        badgeRu: 'Street View маршрут',
+        targetSection: 'map',
+        regionId: sv.regionId,
+        markerId: sv.linkedMarkerId,
+      });
+    }
+  }
+
   return hits.slice(0, 20);
+}
+
+export interface StreetViewVideoMeta {
+  readonly videoId: string;
+  readonly title: string;
+  readonly lengthSeconds: number;
+  readonly frameW: number;
+  readonly frameH: number;
+  readonly frameCount: number;
+  readonly cols: number;
+  readonly rows: number;
+  readonly intervalMs: number;
+  readonly sheetCount: number;
+  readonly maxFrameIndex: number;
+}
+
+const STREET_VIEW_META_MAP = streetViewVideoMetaJson as Readonly<
+  Record<string, StreetViewVideoMeta>
+>;
+
+export function getAllStreetViewNodes(): readonly StreetViewNode[] {
+  return STREET_VIEW_NODES;
+}
+
+export function getRegionStreetViewNodes(regionId: string): readonly StreetViewNode[] {
+  return STREET_VIEW_NODES.filter((n) => n.regionId === regionId);
+}
+
+export function getStreetViewNodeById(nodeId: string): StreetViewNode | undefined {
+  return STREET_VIEW_NODES.find((n) => n.id === nodeId);
+}
+
+export function findStreetViewNodeForMarker(
+  regionId: string,
+  marker: MapMarkerModel,
+): StreetViewNode {
+  const byLink = STREET_VIEW_NODES.find((n) => n.linkedMarkerId === marker.id);
+  if (byLink) return byLink;
+
+  const regional = getRegionStreetViewNodes(regionId);
+  if (regional.length === 0) return STREET_VIEW_NODES[0]!;
+
+  let best = regional[0]!;
+  let bestDist = Infinity;
+  for (const node of regional) {
+    const d = Math.hypot(node.x - marker.x, node.y - marker.y);
+    if (d < bestDist) {
+      bestDist = d;
+      best = node;
+    }
+  }
+  return best;
+}
+
+export function getStreetViewVideoMeta(videoId: string): StreetViewVideoMeta | undefined {
+  return STREET_VIEW_META_MAP[videoId];
+}
+
+export function getRegionLeopardTrixGuides(regionId: string): readonly LeopardTrixVideoGuide[] {
+  return LEOPARDTRIX_VIDEO_GUIDES.filter((g) => g.regionIds.includes(regionId));
+}
+
+export function getAllLeopardTrixGuides(): readonly LeopardTrixVideoGuide[] {
+  return LEOPARDTRIX_VIDEO_GUIDES;
 }

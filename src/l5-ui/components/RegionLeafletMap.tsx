@@ -9,6 +9,7 @@ import {
   Download,
   ExternalLink,
   Filter,
+  Footprints,
   Globe2,
   Layers,
   MapPinPlus,
@@ -18,6 +19,7 @@ import {
   Tag,
   Trash2,
   Upload,
+  Video,
   X,
 } from 'lucide-react';
 import {
@@ -32,12 +34,16 @@ import type {
   MapMarkerModel,
 } from '../../l0-primitives/types.ts';
 import { buildFandomWikiUrl } from '../../l1-codecs/fandomCodec.ts';
+import { deconflictLeafletMarkers } from '../../l2-models/deconflictCartography.ts';
 import {
   computeRegionProgress,
   filterRegionMarkers,
+  findStreetViewNodeForMarker,
   getAllRegions,
   getEffectiveLootLines,
   getRegionById,
+  getRegionLeopardTrixGuides,
+  getRegionStreetViewNodes,
   getWikiImageUrl,
   isLowLootDifficulty,
   resolveRegionCartography,
@@ -50,6 +56,7 @@ import {
 import {
   createCharcoalLeafletIcon,
   createCustomNoteLeafletIcon,
+  createStreetViewNodeLeafletIcon,
 } from '../../l4-renderers/charcoalMarkerIcons.ts';
 import { executeCommand, useCommandState } from '../hooks/useCommandState.ts';
 import { AtlasLegendPanel } from './AtlasLegendPanel.tsx';
@@ -110,6 +117,21 @@ export function RegionLeafletMap() {
   const regionCustomNotes = useMemo(
     () => state.journal.customNotes.filter((n) => n.regionId === region.id),
     [state.journal.customNotes, region.id],
+  );
+
+  const streetViewNodes = useMemo(
+    () => getRegionStreetViewNodes(region.id),
+    [region.id],
+  );
+
+  const regionGuides = useMemo(
+    () => getRegionLeopardTrixGuides(region.id),
+    [region.id],
+  );
+
+  const deconflictedMarkers = useMemo(
+    () => deconflictLeafletMarkers(visibleMarkers),
+    [visibleMarkers],
   );
 
   const progress = useMemo(
@@ -177,6 +199,7 @@ export function RegionLeafletMap() {
       cartography,
       showMicroDetails: state.showMapMicroDetails,
       canvasLayers: state.canvasLayers,
+      streetViewNodes,
     });
 
     if (imageOverlayRef.current) {
@@ -191,6 +214,7 @@ export function RegionLeafletMap() {
     cartography,
     state.showMapMicroDetails,
     state.canvasLayers,
+    streetViewNodes,
     state.mapViewLevel,
   ]);
 
@@ -226,7 +250,7 @@ export function RegionLeafletMap() {
     };
   }, [state.mapViewLevel]);
 
-  // Рендеринг опасных радиусов хищников, маркеров локаций и пользовательских угольных меток
+  // Рендеринг опасных радиусов хищников, разведённых без наложений маркеров, точек Street View и угольных заметок
   useEffect(() => {
     const map = leafletMapRef.current;
     const group = markersLayerRef.current;
@@ -234,7 +258,8 @@ export function RegionLeafletMap() {
 
     group.clearLayers();
 
-    for (const marker of visibleMarkers) {
+    for (const item of deconflictedMarkers) {
+      const { marker, displayX, displayY, isShifted, suppressLabelPill } = item;
       const isVisited = visitedSet.has(marker.id);
       const isFocused = activeMarker?.id === marker.id;
       const sector = formatGridSector(marker.x, marker.y);
@@ -251,14 +276,30 @@ export function RegionLeafletMap() {
         }).addTo(group);
       }
 
-      const leafletMarker = L.marker([marker.y, marker.x], {
+      if (isShifted) {
+        L.polyline(
+          [
+            [marker.y, marker.x],
+            [displayY, displayX],
+          ],
+          {
+            color: '#f59e0b',
+            weight: 1.4,
+            dashArray: '3 3',
+            opacity: 0.8,
+            interactive: false,
+          },
+        ).addTo(group);
+      }
+
+      const leafletMarker = L.marker([displayY, displayX], {
         zIndexOffset: isFocused ? 1000 : 0,
         icon: createCharcoalLeafletIcon({
           category: marker.category,
           isVisited,
           isFocused,
           labelRu: marker.nameRu,
-          showLabel: state.showMarkerLabels,
+          showLabel: state.showMarkerLabels && !suppressLabelPill,
         }),
       });
 
@@ -278,9 +319,60 @@ export function RegionLeafletMap() {
       leafletMarker.addTo(group);
 
       if (state.focusedMarkerId === marker.id) {
-        map.flyTo([marker.y, marker.x], Math.max(map.getZoom(), 0.6), {
+        map.flyTo([displayY, displayX], Math.max(map.getZoom(), 0.6), {
           duration: 0.45,
         });
+      }
+    }
+
+    // Узлы интерактивной прогулки Google Street View (с лёгким смещением от центра здания, чтобы не перекрывать пины!)
+    if (state.canvasLayers.streetViewRoutes) {
+      for (const sv of streetViewNodes) {
+        const collidesMarker = deconflictedMarkers.some(
+          (dm) => Math.hypot(dm.displayX - sv.x, dm.displayY - sv.y) < 18,
+        );
+        const svX = collidesMarker ? Math.min(975, sv.x + 17) : sv.x;
+        const svY = collidesMarker ? Math.max(25, sv.y - 16) : sv.y;
+
+        if (collidesMarker) {
+          L.polyline(
+            [
+              [sv.y, sv.x],
+              [svY, svX],
+            ],
+            {
+              color: '#38bdf8',
+              weight: 1.5,
+              dashArray: '2 3',
+              opacity: 0.85,
+              interactive: false,
+            },
+          ).addTo(group);
+        }
+
+        const isActiveSv = state.activeStreetViewNodeId === sv.id;
+        const svMarker = L.marker([svY, svX], {
+          zIndexOffset: isActiveSv ? 1200 : 400,
+          icon: createStreetViewNodeLeafletIcon({
+            isActive: isActiveSv,
+            headingDeg: sv.headingDeg,
+          }),
+        });
+
+        svMarker.bindTooltip(
+          `<div style="font-weight:700;font-size:12px;color:#7dd3fc;">🚶 Street View: ${sv.titleRu}</div>` +
+            `<div style="font-size:11px;color:#cbd5e1;margin-top:2px;">Кликните, чтобы войти в вид от 1-го лица и шагать по маршруту</div>`,
+          { direction: 'top', offset: [0, -12] },
+        );
+
+        svMarker.on('click', () => {
+          executeCommand('streetview.openNode', {
+            nodeId: sv.id,
+            regionId: sv.regionId,
+          });
+        });
+
+        svMarker.addTo(group);
       }
     }
 
@@ -299,7 +391,10 @@ export function RegionLeafletMap() {
       noteMarker.addTo(group);
     }
   }, [
-    visibleMarkers,
+    deconflictedMarkers,
+    streetViewNodes,
+    state.canvasLayers.streetViewRoutes,
+    state.activeStreetViewNodeId,
     regionCustomNotes,
     visitedSet,
     activeMarker?.id,
@@ -405,10 +500,26 @@ export function RegionLeafletMap() {
             )}
           </div>
 
-          {/* Переключатели деталей полотна, подписей локаций и визуального стиля карты */}
+          {/* Переключатели прогулки Street View, деталей полотна, подписей и стиля */}
           <div className="flex flex-wrap items-center gap-2">
             {state.mapViewLevel === 'region' && (
               <>
+                {streetViewNodes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      executeCommand('streetview.openNode', {
+                        nodeId: streetViewNodes[0]!.id,
+                        regionId: region.id,
+                      })
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#0284c7] px-3.5 py-2 text-xs font-bold text-white shadow transition hover:bg-[#0ea5e9]"
+                  >
+                    <Footprints className="h-3.5 w-3.5" />
+                    Street View прогулка ({streetViewNodes.length})
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => executeCommand('map.toggleMicroDetails', {})}
@@ -891,6 +1002,44 @@ export function RegionLeafletMap() {
                 </div>
               </div>
             </div>
+
+            {/* Разобранные видео-гайды и маршруты @leopardtrixgaming по текущему региону */}
+            {regionGuides.length > 0 && (
+              <div className="rounded-xl border border-[#263a4e] bg-[#101922] p-4 shadow-lg">
+                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#7dd3fc] uppercase">
+                    <Video className="h-4 w-4 text-[#0ea5e9]" />
+                    Разобранные гайды @leopardtrixgaming для «{region.nameRu}» ({regionGuides.length})
+                  </div>
+                  <span className="text-[11px] text-[#8ea3b5]">
+                    База по 63 видео канала (переходы, бункеры, поляроиды, пума)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {regionGuides.slice(0, 6).map((g) => (
+                    <a
+                      key={g.videoId}
+                      href={`https://www.youtube.com/watch?v=${g.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start justify-between gap-2 rounded-lg border border-[#223446] bg-[#0b131b] p-2.5 text-left transition hover:border-[#38bdf8]"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-bold text-[#e2ebf3]">
+                          {g.titleRu}
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-[11px] text-[#8ea3b5]">
+                          {g.summaryRu}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded bg-[#182736] px-1.5 py-0.5 font-mono text-[10px] text-[#7dd3fc]">
+                        {g.durationLabel}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Правая колонка: Подробное досье выбранной локации + список всех точек региона */}
@@ -965,6 +1114,20 @@ export function RegionLeafletMap() {
                     ))}
                   </ul>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    executeCommand('streetview.openNode', {
+                      nodeId: findStreetViewNodeForMarker(region.id, activeMarker).id,
+                      regionId: region.id,
+                    })
+                  }
+                  className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#0284c7] px-3 py-2 text-xs font-bold text-white shadow transition hover:bg-[#0ea5e9]"
+                >
+                  <Footprints className="h-4 w-4" />
+                  Пройти в Street View (Как Google Maps)
+                </button>
 
                 <button
                   type="button"

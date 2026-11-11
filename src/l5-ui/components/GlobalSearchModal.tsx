@@ -68,7 +68,12 @@ export function GlobalSearchModal() {
 
   const handleSelectHit = (hit: GlobalSearchHit) => {
     executeCommand('ui.setSearchModalOpen', { open: false });
-    if (hit.regionId) {
+    if (hit.id.startsWith('sv-')) {
+      executeCommand('streetview.openNode', {
+        nodeId: hit.id.slice(3),
+        regionId: hit.regionId,
+      });
+    } else if (hit.regionId) {
       executeCommand('map.selectRegion', {
         regionId: hit.regionId,
         openRegionMap: true,

@@ -17,10 +17,19 @@ import {
   WILDLIFE_ENTRIES,
 } from '../l2-models/data/encyclopediaData.ts';
 import {
+  deconflictLeafletMarkers,
+  resolveDeconflictedAtlasLayout,
+} from '../l2-models/deconflictCartography.ts';
+import {
   computeRegionProgress,
   filterRegionMarkers,
+  getAllLeopardTrixGuides,
   getAllRegions,
+  getAllStreetViewNodes,
   getEffectiveLootLines,
+  getRegionStreetViewNodes,
+  getStreetViewNodeById,
+  getStreetViewVideoMeta,
   getWikiImageUrl,
   resolveRegionCartography,
   searchLocalEncyclopedia,
@@ -211,12 +220,80 @@ describe('L2 Models — Difficulty Oracle & Encyclopedia Search', () => {
     expect(miltonInterloper.extraPaths.some((p) => p.kind === 'interloper_route')).toBe(true);
     expect(miltonVoyageur.extraPaths.some((p) => p.kind === 'interloper_route')).toBe(false);
   });
+
+  it('guarantees every region has Street View walkthrough nodes backed by valid LeopardTriX sprite metadata and graph links', () => {
+    const regions = getAllRegions();
+    const guides = getAllLeopardTrixGuides();
+    expect(guides.length).toBeGreaterThanOrEqual(60);
+
+    for (const r of regions) {
+      const svNodes = getRegionStreetViewNodes(r.id);
+      expect(svNodes.length, `Missing Street View nodes for ${r.id}`).toBeGreaterThanOrEqual(2);
+    }
+
+    for (const node of getAllStreetViewNodes()) {
+      const meta = getStreetViewVideoMeta(node.videoId);
+      expect(meta, `Missing sprite metadata for video ${node.videoId}`).toBeDefined();
+      expect(meta!.sheetCount).toBeGreaterThan(0);
+      expect(node.endSec).toBeGreaterThanOrEqual(node.startSec);
+      if (node.nextNodeId) {
+        expect(getStreetViewNodeById(node.nextNodeId), `Broken nextNodeId on ${node.id}`).toBeDefined();
+      }
+      if (node.prevNodeId) {
+        expect(getStreetViewNodeById(node.prevNodeId), `Broken prevNodeId on ${node.id}`).toBeDefined();
+      }
+    }
+  });
+
+  it('de-conflicts closely stacked spawns and Leaflet pins so icons never overlap', () => {
+    const cart = resolveRegionCartography('mystery-lake', 'voyageur');
+    const layout = resolveDeconflictedAtlasLayout({
+      buildings: cart.buildings,
+      microSpawns: cart.microSpawns,
+      subLocations: cart.subLocations,
+      areaLabels: [],
+      exitBanners: [],
+    });
+
+    for (let i = 0; i < layout.microSpawns.length; i++) {
+      for (let j = i + 1; j < layout.microSpawns.length; j++) {
+        const a = layout.microSpawns[i]!;
+        const b = layout.microSpawns[j]!;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(19);
+      }
+    }
+
+    const mlMarkers = filterRegionMarkers({
+      regionId: 'mystery-lake',
+      difficulty: 'voyageur',
+      enabledCategories: allCats,
+    });
+    const resolvedPins = deconflictLeafletMarkers(mlMarkers);
+    for (let i = 0; i < resolvedPins.length; i++) {
+      for (let j = i + 1; j < resolvedPins.length; j++) {
+        const a = resolvedPins[i]!;
+        const b = resolvedPins[j]!;
+        expect(Math.hypot(a.displayX - b.displayX, a.displayY - b.displayY)).toBeGreaterThanOrEqual(
+          26,
+        );
+      }
+    }
+  });
 });
 
 describe('L3 Command Engine — Everything is a Command', () => {
-  it('executes commands deterministically for visited markers, labels, canvas layers, and custom charcoal notes', () => {
+  it('executes commands deterministically for visited markers, labels, canvas layers, streetview, and custom charcoal notes', () => {
     const engine = new TldCommandEngine();
     engine.execute('survivor.resetJournal', {});
+
+    expect(engine.getState().activeStreetViewNodeId).toBeNull();
+    engine.execute('streetview.openNode', {
+      nodeId: 'sv-ml-camp-office',
+      regionId: 'mystery-lake',
+    });
+    expect(engine.getState().activeStreetViewNodeId).toBe('sv-ml-camp-office');
+    engine.execute('streetview.close', {});
+    expect(engine.getState().activeStreetViewNodeId).toBeNull();
 
     expect(engine.getState().showMarkerLabels).toBe(false);
     engine.execute('map.toggleMarkerLabels', {});

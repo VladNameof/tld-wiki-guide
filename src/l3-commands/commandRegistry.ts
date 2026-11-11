@@ -31,6 +31,7 @@ export interface AppSessionState {
   readonly showMarkerLabels: boolean;
   readonly showMapMicroDetails: boolean;
   readonly canvasLayers: CanvasDetailLayers;
+  readonly activeStreetViewNodeId: string | null;
   readonly isDrawingCustomNote: boolean;
   readonly snowEnabled: boolean;
   readonly isSearchModalOpen: boolean;
@@ -55,6 +56,8 @@ export interface CommandPayloads {
   'map.toggleCanvasLayer': { readonly layer: CanvasLayerKey };
   'map.setAllCanvasLayers': { readonly enabled: boolean };
   'map.setDrawingNoteMode': { readonly active: boolean };
+  'streetview.openNode': { readonly nodeId: string; readonly regionId?: string };
+  'streetview.close': Record<string, never>;
   'ui.toggleSnow': Record<string, never>;
   'ui.setSearchModalOpen': { readonly open: boolean };
   'survivor.toggleVisited': { readonly markerId: string };
@@ -81,6 +84,7 @@ const ALL_CANVAS_LAYERS_ON: CanvasDetailLayers = {
   faunaAndCarcasses: true,
   floraAndSaplings: true,
   lootAndStations: true,
+  streetViewRoutes: true,
 };
 
 const ALL_CANVAS_LAYERS_OFF: CanvasDetailLayers = {
@@ -89,6 +93,7 @@ const ALL_CANVAS_LAYERS_OFF: CanvasDetailLayers = {
   faunaAndCarcasses: false,
   floraAndSaplings: false,
   lootAndStations: false,
+  streetViewRoutes: false,
 };
 
 function createInitialState(): AppSessionState {
@@ -103,6 +108,7 @@ function createInitialState(): AppSessionState {
     showMarkerLabels: false,
     showMapMicroDetails: true,
     canvasLayers: ALL_CANVAS_LAYERS_ON,
+    activeStreetViewNodeId: null,
     isDrawingCustomNote: false,
     snowEnabled: true,
     isSearchModalOpen: false,
@@ -237,6 +243,22 @@ export class TldCommandEngine {
       case 'map.setDrawingNoteMode': {
         const p = payload as CommandPayloads['map.setDrawingNoteMode'];
         next = { ...prev, isDrawingCustomNote: p.active };
+        break;
+      }
+      case 'streetview.openNode': {
+        const p = payload as CommandPayloads['streetview.openNode'];
+        next = {
+          ...prev,
+          activeSection: 'map',
+          mapViewLevel: 'region',
+          selectedRegionId: p.regionId ?? prev.selectedRegionId,
+          activeStreetViewNodeId: p.nodeId,
+          isDrawingCustomNote: false,
+        };
+        break;
+      }
+      case 'streetview.close': {
+        next = { ...prev, activeStreetViewNodeId: null };
         break;
       }
       case 'ui.toggleSnow': {

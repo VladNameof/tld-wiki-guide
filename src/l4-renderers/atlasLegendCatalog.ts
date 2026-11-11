@@ -300,6 +300,60 @@ export const ATLAS_LEGEND_GROUPS: readonly AtlasLegendGroup[] = [
           <text x="0" y="-0.5" text-anchor="middle" fill="#ffffff" font-family="Oswald, sans-serif" font-size="7.5" font-weight="700">S</text>
         `,
       },
+      {
+        id: 'street_view_node',
+        titleRu: 'Точка Street View (Прогулка)',
+        detailRu: 'Голубой узел интерактивного обхода как в Google Maps: откройте вид от первого лица и шагайте по кадрам маршрута!',
+        layerKey: 'streetViewRoutes',
+        renderIcon: () => `
+          <circle cx="0" cy="0" r="6.8" fill="#0284c7" stroke="#f0f9ff" stroke-width="1.4" />
+          <circle cx="0" cy="-2" r="1.8" fill="#ffffff" />
+          <path d="M -2.5 3.5 C -2.5 1, 2.5 1, 2.5 3.5" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+        `,
+      },
+      {
+        id: 'polaroid_vista',
+        titleRu: 'Поляроид и Живописная точка',
+        detailRu: 'Точка спавна Поляроида или обзорного уступа (Vista) для мгновенного открытия широкого сектора углём.',
+        layerKey: 'lootAndStations',
+        renderIcon: () => `
+          <rect x="-5.5" y="-5.5" width="11" height="11" rx="1.2" fill="#f8fafc" stroke="#0284c7" stroke-width="1.4" />
+          <rect x="-3.5" y="-3.5" width="7" height="5" fill="#0369a1" />
+          <circle cx="1.5" cy="-1.5" r="1.1" fill="#fde047" />
+        `,
+      },
+      {
+        id: 'memento_cache',
+        titleRu: 'Записка / Тайник Memento',
+        detailRu: 'Памятная записка (козырёк авто / доска) с подсказкой или ключом к тайнику с припасами.',
+        layerKey: 'lootAndStations',
+        renderIcon: () => `
+          <rect x="-6.5" y="-4.5" width="13" height="9" rx="1.2" fill="#fef3c7" stroke="#b45309" stroke-width="1.3" />
+          <path d="M -6 -4 L 0 1 L 6 -4" fill="none" stroke="#b45309" stroke-width="1.2" />
+        `,
+      },
+      {
+        id: 'transmitter_tower',
+        titleRu: 'Передатчик Signal Void (📡)',
+        detailRu: 'Радиовышка для ремонта с последующим пеленгом бункеров Alpha, Beta, Gamma и Omega.',
+        layerKey: 'lootAndStations',
+        renderIcon: () => `
+          <circle cx="0" cy="0" r="6.8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2" />
+          <path d="M 0 3 V -2 M -2.5 -1 C -3.5 -3.5, 3.5 -3.5, 2.5 -1" stroke="#38bdf8" stroke-width="1.5" fill="none" stroke-linecap="round" />
+          <circle cx="0" cy="-2.5" r="1.4" fill="#fbbf24" />
+        `,
+      },
+      {
+        id: 'car_mailbox',
+        titleRu: 'Автомобили и Почтовые ящики',
+        detailRu: 'Остовы машин (защита от ветра + сон/бардачок/багажник) и почтовые ящики в посёлках (записки, спички).',
+        layerKey: 'lootAndStations',
+        renderIcon: () => `
+          <rect x="-11" y="-2.5" width="11" height="5.5" rx="1.5" fill="#334155" stroke="#e2e8f0" stroke-width="1.1" />
+          <path d="M -9 -2.5 L -7 -5.5 H -3 L -1 -2.5" fill="#475569" stroke="#e2e8f0" stroke-width="1" />
+          <rect x="3" y="-4" width="6" height="7" rx="2" fill="#1d4ed8" stroke="#dbeafe" stroke-width="1.1" />
+        `,
+      },
     ],
   },
   {

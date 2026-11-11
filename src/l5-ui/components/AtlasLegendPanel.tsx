@@ -11,11 +11,12 @@ interface LayerToggleMeta {
 }
 
 const CANVAS_LAYER_SWITCHES: readonly LayerToggleMeta[] = [
+  { key: 'streetViewRoutes', labelRu: 'Street View узлы и маршруты', badgeEmoji: '🚶' },
   { key: 'buildingsAndSublocs', labelRu: 'Постройки, удобства и подлокации', badgeEmoji: '🏠' },
   { key: 'ropesAndRoutes', labelRu: 'Тропы, тросы и путь ковки', badgeEmoji: '🪢' },
   { key: 'faunaAndCarcasses', labelRu: 'Животные, туши и трупы', badgeEmoji: '🐺' },
   { key: 'floraAndSaplings', labelRu: 'Травы, мхи и саженцы', badgeEmoji: '🌿' },
-  { key: 'lootAndStations', labelRu: 'Оружие, верстаки, старт и лут', badgeEmoji: '⚒️' },
+  { key: 'lootAndStations', labelRu: 'Поляроиды, вышки, авто и лут', badgeEmoji: '⚒️' },
 ];
 
 export function AtlasLegendPanel() {

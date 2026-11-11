@@ -6,3 +6,4 @@ dist
 .env.*.local
 *.log
 coverage
+scripts/.blob-cache.json

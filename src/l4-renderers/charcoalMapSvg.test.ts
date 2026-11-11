@@ -4,10 +4,10 @@ import { ATLAS_LEGEND_GROUPS } from './atlasLegendCatalog.ts';
 import { buildRegionCharcoalMapDataUrl } from './charcoalMapSvg.ts';
 
 describe('L4 Renderers — Charcoal & Aurora Difficulty-Reactive SVG Atlas & Full Legend', () => {
-  it('provides 45+ categorized legend symbols with non-empty SVG vector icons', () => {
+  it('provides 50+ categorized legend symbols with non-empty SVG vector icons', () => {
     const allItems = ATLAS_LEGEND_GROUPS.flatMap((g) => g.items);
     expect(ATLAS_LEGEND_GROUPS).toHaveLength(6);
-    expect(allItems.length).toBeGreaterThanOrEqual(45);
+    expect(allItems.length).toBeGreaterThanOrEqual(50);
     for (const item of allItems) {
       expect(item.renderIcon(true).trim().length).toBeGreaterThan(10);
       expect(item.renderIcon(false).trim().length).toBeGreaterThan(10);

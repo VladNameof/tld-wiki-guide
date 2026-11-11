@@ -12,6 +12,7 @@ import { HeaderHud } from './components/HeaderHud.tsx';
 import { HomePortalView } from './components/HomePortalView.tsx';
 import { RegionLeafletMap } from './components/RegionLeafletMap.tsx';
 import { SnowfallOverlay } from './components/SnowfallOverlay.tsx';
+import { StreetViewWalkerModal } from './components/StreetViewWalkerModal.tsx';
 import { useCommandState } from './hooks/useCommandState.ts';
 
 export function App() {
@@ -22,6 +23,7 @@ export function App() {
       <SnowfallOverlay enabled={state.snowEnabled} />
       <HeaderHud />
       <GlobalSearchModal />
+      <StreetViewWalkerModal />
 
       <main className="relative z-10 flex-1">
         {state.activeSection === 'home' && <HomePortalView />}

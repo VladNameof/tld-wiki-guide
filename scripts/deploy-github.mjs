@@ -3,6 +3,7 @@
  * через официальный GitHub REST & Git Data API.
  * Строго соблюдает политику безопасности: файлы .env / node_modules никогда не индексируются и не выводятся.
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const REPO_NAME = 'tld-wiki-guide';
 const API_BASE = 'https://api.github.com';
+const BLOB_CACHE_PATH = path.join(__dirname, '.blob-cache.json');
 
 const ALLOWED_ROOT_FILES = [
   '.gitignore',
@@ -44,7 +46,12 @@ function collectFilesRecursive(baseDir, relPrefix = '') {
   const results = [];
   if (!fs.existsSync(baseDir)) return results;
   for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.env') || entry.name === 'node_modules' || entry.name === '.git') {
+    if (
+      entry.name.startsWith('.env') ||
+      entry.name === '.blob-cache.json' ||
+      entry.name === 'node_modules' ||
+      entry.name === '.git'
+    ) {
       continue;
     }
     const abs = path.join(baseDir, entry.name);
@@ -85,29 +92,93 @@ async function ghRequest(token, method, endpoint, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
+  const retryAfter = Number(res.headers.get('retry-after') || 0);
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  return { status: res.status, ok: res.ok, data };
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { message: text.slice(0, 200) };
+  }
+  return { status: res.status, ok: res.ok, retryAfter, data };
 }
 
 async function uploadBlobWithRetry(token, owner, repo, contentB64, label) {
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 6; attempt++) {
     const blobRes = await ghRequest(token, 'POST', `/repos/${owner}/${repo}/git/blobs`, {
       content: contentB64,
       encoding: 'base64',
     });
     if (blobRes.ok) return blobRes.data.sha;
-    if (attempt < 3) {
-      await new Promise((r) => setTimeout(r, 800 * attempt));
+    const isRateLimit = blobRes.status === 403 || blobRes.status === 429;
+    const waitMs = isRateLimit
+      ? (Math.max(blobRes.retryAfter || 35, 25) + 2) * 1000
+      : 1200 * attempt;
+    if (attempt < 6) {
+      if (isRateLimit) {
+        console.log(`  ⏳ Пауза по лимиту GitHub (${Math.round(waitMs / 1000)}с) перед повтором...`);
+      }
+      await new Promise((r) => setTimeout(r, waitMs));
     } else {
-      throw new Error(`Не удалось создать blob для ${label} (HTTP ${blobRes.status})`);
+      throw new Error(
+        `Не удалось создать blob для ${label} (HTTP ${blobRes.status}: ${blobRes.data?.message ?? ''})`,
+      );
     }
   }
 }
 
-async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branch, commitMessage) {
+function loadLocalBlobCache() {
+  if (!fs.existsSync(BLOB_CACHE_PATH)) return new Set();
+  try {
+    const arr = JSON.parse(fs.readFileSync(BLOB_CACHE_PATH, 'utf8'));
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLocalBlobCache(knownShas) {
+  fs.writeFileSync(BLOB_CACHE_PATH, JSON.stringify([...knownShas]));
+}
+
+function computeGitBlobSha1(buf) {
+  const header = Buffer.from(`blob ${buf.length}\0`, 'utf8');
+  return crypto.createHash('sha1').update(header).update(buf).digest('hex');
+}
+
+async function fetchKnownBlobShas(token, owner, repo, branches) {
+  const known = loadLocalBlobCache();
+  for (const branch of branches) {
+    const res = await ghRequest(
+      token,
+      'GET',
+      `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`,
+    );
+    if (res.ok && Array.isArray(res.data?.tree)) {
+      for (const item of res.data.tree) {
+        if (item.type === 'blob' && item.sha) {
+          known.add(item.sha);
+        }
+      }
+    }
+  }
+  return known;
+}
+
+async function uploadTreeCommit(
+  token,
+  owner,
+  repo,
+  files,
+  extraTextFiles,
+  branch,
+  commitMessage,
+  knownShas,
+) {
   const treeItems = [];
-  const batchSize = 5;
+  const batchSize = 3;
+  let uploadedCount = 0;
+  let reusedCount = 0;
 
   for (let i = 0; i < files.length; i += batchSize) {
     const chunk = files.slice(i, i + batchSize);
@@ -116,8 +187,21 @@ async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branc
         if (path.basename(f.rel).startsWith('.env')) {
           throw new Error(`Заблокирована попытка загрузки секретного файла: ${f.rel}`);
         }
-        const contentB64 = fs.readFileSync(f.abs).toString('base64');
+        const buf = fs.readFileSync(f.abs);
+        const localSha = computeGitBlobSha1(buf);
+        if (knownShas.has(localSha)) {
+          reusedCount++;
+          return {
+            path: f.rel,
+            mode: '100644',
+            type: 'blob',
+            sha: localSha,
+          };
+        }
+        const contentB64 = buf.toString('base64');
         const sha = await uploadBlobWithRetry(token, owner, repo, contentB64, f.rel);
+        knownShas.add(sha);
+        uploadedCount++;
         return {
           path: f.rel,
           mode: '100644',
@@ -127,7 +211,18 @@ async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branc
       }),
     );
     treeItems.push(...chunkItems);
+    if (uploadedCount > 0 && uploadedCount % 30 === 0) {
+      saveLocalBlobCache(knownShas);
+    }
+    // Деликатная пауза между пачками, чтобы не упираться в secondary rate limit GitHub
+    await new Promise((r) => setTimeout(r, 380));
+    if (i > 0 && (i % 90 === 0 || i + batchSize >= files.length)) {
+      console.log(
+        `  [${branch}] обработано ${Math.min(i + batchSize, files.length)}/${files.length} (загружено: ${uploadedCount}, кэш-SHA: ${reusedCount})`,
+      );
+    }
   }
+  saveLocalBlobCache(knownShas);
 
   for (const extra of extraTextFiles) {
     const blobRes = await ghRequest(token, 'POST', `/repos/${owner}/${repo}/git/blobs`, {
@@ -145,11 +240,28 @@ async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branc
     });
   }
 
-  const treeRes = await ghRequest(token, 'POST', `/repos/${owner}/${repo}/git/trees`, {
-    tree: treeItems,
-  });
-  if (!treeRes.ok) {
-    throw new Error(`Не удалось создать дерево Git (HTTP ${treeRes.status})`);
+  let rootTreeSha = undefined;
+  const treeChunkSize = 120;
+  for (let i = 0; i < treeItems.length; i += treeChunkSize) {
+    const part = treeItems.slice(i, i + treeChunkSize);
+    let createdSha = '';
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const payload = rootTreeSha ? { base_tree: rootTreeSha, tree: part } : { tree: part };
+      const treeRes = await ghRequest(token, 'POST', `/repos/${owner}/${repo}/git/trees`, payload);
+      if (treeRes.ok && treeRes.data?.sha) {
+        createdSha = treeRes.data.sha;
+        break;
+      }
+      if (attempt < 4) {
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      } else {
+        throw new Error(`Не удалось создать дерево Git (HTTP ${treeRes.status})`);
+      }
+    }
+    rootTreeSha = createdSha;
+    console.log(
+      `  [${branch}] дерево Git: ${Math.min(i + treeChunkSize, treeItems.length)}/${treeItems.length} узлов`,
+    );
   }
 
   const refRes = await ghRequest(token, 'GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
@@ -157,7 +269,7 @@ async function uploadTreeCommit(token, owner, repo, files, extraTextFiles, branc
 
   const commitRes = await ghRequest(token, 'POST', `/repos/${owner}/${repo}/git/commits`, {
     message: commitMessage,
-    tree: treeRes.data.sha,
+    tree: rootTreeSha,
     parents,
   });
   if (!commitRes.ok) {
@@ -230,6 +342,9 @@ async function main() {
     throw new Error(`Ошибка проверки репозитория (HTTP ${repoCheck.status})`);
   }
 
+  const knownShas = await fetchKnownBlobShas(token, owner, REPO_NAME, ['main', 'gh-pages']);
+  console.log(`Найдено существующих Git blob-объектов в репозитории: ${knownShas.size}`);
+
   // 2. Загружаем исходный код в ветку main
   const mainFiles = collectMainSourceFiles();
   console.log(`Загрузка ${mainFiles.length} файлов исходного кода в ветку main ...`);
@@ -240,7 +355,8 @@ async function main() {
     mainFiles,
     [],
     'main',
-    'feat(v4): ultra-detailed 2.4K survey atlas, sub-locations, station badges & full 47-symbol legend',
+    'feat(v5): Google Street View walkthrough across all 15 regions from 63 LeopardTriX guides + strict zero-overlap map layout',
+    knownShas,
   );
   console.log(`✓ Ветка main обновлена (коммит ${mainSha})`);
 
@@ -254,7 +370,8 @@ async function main() {
     distFiles,
     [{ rel: '.nojekyll', content: '' }],
     'gh-pages',
-    'deploy: publish static build to GitHub Pages',
+    'deploy: publish static build to GitHub Pages (v5 Street View + Zero-Overlap Atlas)',
+    knownShas,
   );
   console.log(`✓ Ветка gh-pages обновлена (коммит ${pagesSha})`);
 

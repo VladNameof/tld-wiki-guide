@@ -205,7 +205,12 @@ export type MapMicroSpawnKind =
   | 'first_aid'
   | 'tools'
   | 'backpack'
-  | 'coal';
+  | 'coal'
+  | 'polaroid'
+  | 'memento'
+  | 'car'
+  | 'mailbox'
+  | 'transmitter';
 
 export interface MapMicroSpawn {
   readonly x: number;
@@ -227,9 +232,46 @@ export interface CanvasDetailLayers {
   readonly faunaAndCarcasses: boolean;
   readonly floraAndSaplings: boolean;
   readonly lootAndStations: boolean;
+  readonly streetViewRoutes: boolean;
 }
 
 export type CanvasLayerKey = keyof CanvasDetailLayers;
+
+export type StreetViewRouteCategory =
+  | 'bases'
+  | 'route'
+  | 'transition'
+  | 'bunker'
+  | 'polaroid'
+  | 'cougar'
+  | 'unique_loot';
+
+export interface StreetViewBranch {
+  readonly targetNodeId: string;
+  readonly labelRu: string;
+  readonly headingDeg: number;
+}
+
+export interface StreetViewNode {
+  readonly id: string;
+  readonly regionId: string;
+  readonly routeId: string;
+  readonly routeTitleRu: string;
+  readonly routeCategory: StreetViewRouteCategory;
+  readonly titleRu: string;
+  readonly titleEn: string;
+  readonly descriptionRu: string;
+  readonly x: number;
+  readonly y: number;
+  readonly headingDeg: number;
+  readonly videoId: string;
+  readonly startSec: number;
+  readonly endSec: number;
+  readonly prevNodeId?: string;
+  readonly nextNodeId?: string;
+  readonly branches?: readonly StreetViewBranch[];
+  readonly linkedMarkerId?: string;
+}
 
 export interface RegionCartographyConfig {
   readonly regionId: string;

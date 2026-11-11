@@ -7,7 +7,12 @@ import type {
   MapPathKind,
   MapThemeId,
   RegionModel,
+  StreetViewNode,
 } from '../l0-primitives/types.ts';
+import {
+  resolveDeconflictedAtlasLayout,
+  type DeconflictedBuildingPlacement,
+} from '../l2-models/deconflictCartography.ts';
 import type {
   ResolvedBuildingItem,
   ResolvedRegionCartography,
@@ -284,7 +289,11 @@ function renderAmenityMiniStrip(
  * Рендерит отдельную постройку (целую, рандомно повреждённую или сгоревшую в руины в зависимости от выбранной сложности!),
  * а также плашку названия и полоску значков удобств для ключевых ориентиров.
  */
-function renderBuildingSvg(b: ResolvedBuildingItem, isCharcoal: boolean): string {
+function renderBuildingSvg(
+  b: ResolvedBuildingItem,
+  isCharcoal: boolean,
+  calloutPlacement?: DeconflictedBuildingPlacement | null,
+): string {
   const sx = b.x;
   const sy = toSvgY(b.y);
   const sc = b.scale ?? 1;
@@ -404,20 +413,24 @@ function renderBuildingSvg(b: ResolvedBuildingItem, isCharcoal: boolean): string
 
   let callout = '';
   if (b.labelRu) {
-    const w = Math.max(76, b.labelRu.length * 6.3 + 14);
+    const w = calloutPlacement?.calloutBoxWidth ?? Math.max(76, b.labelRu.length * 6.3 + 14);
     const labelColor = isCharcoal ? '#1e3a8a' : '#93c5fd';
-    const boxBg = isCharcoal ? 'rgba(250, 246, 236, 0.94)' : 'rgba(12, 21, 31, 0.94)';
+    const boxBg = isCharcoal ? 'rgba(250, 246, 236, 0.95)' : 'rgba(12, 21, 31, 0.95)';
     const boxStroke = b.kind === 'landmark' || b.kind === 'industrial' ? '#c92a2a' : labelColor;
     const amenities = b.amenities ?? (b.hasStove ? ['stove'] : []);
     const amenityStrip = renderAmenityMiniStrip(amenities, b.state === 'burned_ruin');
-    const offsetY = amenities.length > 0 ? -18 * sc - 14 : -16 * sc - 6;
+    const offsetX = calloutPlacement?.calloutOffsetX ?? 0;
+    const offsetY =
+      calloutPlacement?.calloutOffsetY ?? (amenities.length > 0 ? -18 * sc - 14 : -16 * sc - 6);
 
     callout = `
-      <g transform="translate(0, ${offsetY.toFixed(1)})">
-        <rect x="${(-w / 2).toFixed(1)}" y="-9" width="${w.toFixed(1)}" height="14" rx="2.5" fill="${boxBg}" stroke="${boxStroke}" stroke-width="1.15" />
-        <text x="0" y="1" text-anchor="middle" fill="${b.kind === 'landmark' || b.kind === 'industrial' ? (isCharcoal ? '#991b1b' : '#fca5a5') : labelColor}" font-family="Oswald, sans-serif" font-size="8.8" font-weight="700" letter-spacing="0.4">${escSvg(b.labelRu)}</text>
-        ${amenityStrip}
-        <line x1="0" y1="${amenities.length > 0 ? '16.5' : '5'}" x2="0" y2="${(amenities.length > 0 ? 18 : 6 * sc).toFixed(1)}" stroke="${halo}" stroke-width="1.6" />
+      <g>
+        <line x1="0" y1="0" x2="${offsetX.toFixed(1)}" y2="${offsetY.toFixed(1)}" stroke="${halo}" stroke-width="1.5" opacity="0.85" />
+        <g transform="translate(${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})">
+          <rect x="${(-w / 2).toFixed(1)}" y="-9" width="${w.toFixed(1)}" height="14" rx="2.5" fill="${boxBg}" stroke="${boxStroke}" stroke-width="1.15" />
+          <text x="0" y="1" text-anchor="middle" fill="${b.kind === 'landmark' || b.kind === 'industrial' ? (isCharcoal ? '#991b1b' : '#fca5a5') : labelColor}" font-family="Oswald, sans-serif" font-size="8.8" font-weight="700" letter-spacing="0.4">${escSvg(b.labelRu)}</text>
+          ${amenityStrip}
+        </g>
       </g>
     `;
   }
@@ -711,13 +724,48 @@ function renderMicroSpawnSvg(
         <circle cx="0" cy="0" r="2.2" fill="none" stroke="#fde047" stroke-width="1.2" />
       `;
       break;
+    case 'polaroid':
+      inner = `
+        <rect x="-5.5" y="-5.5" width="11" height="11" rx="1.2" fill="#f8fafc" stroke="#0284c7" stroke-width="1.4" />
+        <rect x="-3.5" y="-3.5" width="7" height="5" fill="#0369a1" />
+        <circle cx="1.5" cy="-1.5" r="1.1" fill="#fde047" />
+      `;
+      break;
+    case 'memento':
+      inner = `
+        <rect x="-6.5" y="-4.5" width="13" height="9" rx="1.2" fill="#fef3c7" stroke="#b45309" stroke-width="1.3" />
+        <path d="M -6 -4 L 0 1 L 6 -4" fill="none" stroke="#b45309" stroke-width="1.2" />
+      `;
+      break;
+    case 'car':
+      inner = `
+        <circle cx="0" cy="0" r="7.2" fill="${haloBg}" />
+        <rect x="-5.8" y="-2.2" width="11.6" height="4.8" rx="1.4" fill="#334155" stroke="#e2e8f0" stroke-width="1" />
+        <path d="M -3.8 -2.2 L -2.2 -4.8 H 2.2 L 3.8 -2.2" fill="#475569" stroke="#e2e8f0" stroke-width="0.9" />
+      `;
+      break;
+    case 'mailbox':
+      inner = `
+        <circle cx="0" cy="0" r="6.8" fill="${haloBg}" />
+        <rect x="-3.4" y="-4.5" width="6.8" height="8" rx="2.2" fill="#1d4ed8" stroke="#dbeafe" stroke-width="1.1" />
+        <line x1="-2" y1="-1" x2="2" y2="-1" stroke="#fde047" stroke-width="1.2" />
+      `;
+      break;
+    case 'transmitter':
+      inner = `
+        <circle cx="0" cy="0" r="7.4" fill="#1e293b" stroke="#38bdf8" stroke-width="1.3" />
+        <path d="M 0 3.5 V -1.5 M -2.8 -0.8 C -3.8 -3.5, 3.8 -3.5, 2.8 -0.8" stroke="#38bdf8" stroke-width="1.5" fill="none" stroke-linecap="round" />
+        <circle cx="0" cy="-2.5" r="1.4" fill="#fbbf24" />
+      `;
+      break;
   }
 
-  return `<g transform="translate(${sx}, ${sy})">${inner}</g>`;
+  // Чёткий контрастный масштаб 1.18x чтобы все значки читались без наложения и слипания
+  return `<g transform="translate(${sx}, ${sy}) scale(1.18)">${inner}</g>`;
 }
 
 /**
- * Генерирует 7-колоночную полную легенду условных знаков атласа (42 пиктограммы!) в нижнем поле листа [svgY = 1012..1160].
+ * Генерирует полную 7-колоночную легенду (42 пиктограммы!) в нижнем поле листа [svgY = 1012..1160].
  */
 function renderMasterBottomLegend(opts: {
   readonly region: RegionModel;
@@ -738,30 +786,29 @@ function renderMasterBottomLegend(opts: {
     legendBorder,
   } = opts;
 
-  // Собираем 36 ключевых позиций из ATLAS_LEGEND_GROUPS в 6 колонок по 6 строк + левый титульный блок!
   const allEntries = ATLAS_LEGEND_GROUPS.flatMap((g) => g.items);
-  const selected = allEntries.slice(0, 36);
+  const selected = allEntries.slice(0, 42);
 
   const columnsMarkup: string[] = [];
-  const colPositions = [184, 322, 462, 602, 738, 872];
+  const colPositions = [176, 293, 410, 527, 644, 761, 878];
 
-  for (let c = 0; c < 6; c++) {
+  for (let c = 0; c < 7; c++) {
     const colX = colPositions[c]!;
     const slice = selected.slice(c * 6, c * 6 + 6);
     const rows = slice.map((item, rIdx) => {
       const ry = 18 + rIdx * 21.5;
       const shortTitle =
-        item.titleRu.length > 21 ? `${item.titleRu.slice(0, 20)}…` : item.titleRu;
+        item.titleRu.length > 18 ? `${item.titleRu.slice(0, 17)}…` : item.titleRu;
       return `
         <g transform="translate(0, ${ry})">
-          <g transform="translate(11, -3) scale(0.82)">${item.renderIcon(isCharcoal)}</g>
-          <text x="27" y="0" fill="${labelColor}" font-family="Inter, sans-serif" font-size="8" font-weight="600">${escSvg(shortTitle)}</text>
+          <g transform="translate(9, -3) scale(0.76)">${item.renderIcon(isCharcoal)}</g>
+          <text x="23" y="0" fill="${labelColor}" font-family="Inter, sans-serif" font-size="7.3" font-weight="600">${escSvg(shortTitle)}</text>
         </g>
       `;
     });
 
     columnsMarkup.push(`
-      <line x1="${colX - 8}" y1="8" x2="${colX - 8}" y2="140" stroke="${legendBorder}" stroke-width="0.8" opacity="0.35" />
+      <line x1="${colX - 6}" y1="8" x2="${colX - 6}" y2="140" stroke="${legendBorder}" stroke-width="0.7" opacity="0.32" />
       <g transform="translate(${colX}, 0)">${rows.join('')}</g>
     `);
   }
@@ -799,14 +846,24 @@ export function buildRegionCharcoalMapDataUrl(opts: {
   readonly cartography: ResolvedRegionCartography;
   readonly showMicroDetails: boolean;
   readonly canvasLayers?: CanvasDetailLayers;
+  readonly streetViewNodes?: readonly StreetViewNode[];
 }): string {
-  const { region, theme, difficulty, cartography, showMicroDetails, canvasLayers } = opts;
+  const {
+    region,
+    theme,
+    difficulty,
+    cartography,
+    showMicroDetails,
+    canvasLayers,
+    streetViewNodes = [],
+  } = opts;
   const layers: CanvasDetailLayers = canvasLayers ?? {
     buildingsAndSublocs: true,
     ropesAndRoutes: true,
     faunaAndCarcasses: showMicroDetails,
     floraAndSaplings: showMicroDetails,
     lootAndStations: showMicroDetails,
+    streetViewRoutes: true,
   };
 
   const isCharcoal = theme === 'charcoal';
@@ -1032,36 +1089,78 @@ export function buildRegionCharcoalMapDataUrl(opts: {
     pathLayer.push(renderExtraPath(ep.kind, ep.points, isCharcoal));
   }
 
-  // 5. Тросы, микро-спавны по подслоям (фауна / флора / лут и станции) и постройки
+  // 5. Предварительный анти-коллизионный расчёт позиций: 0 наложений иконок и подписей!
+  const visibleSpawnsRaw = cartography.microSpawns.filter((sp) => {
+    if (FAUNA_KINDS.has(sp.kind)) return layers.faunaAndCarcasses;
+    if (FLORA_KINDS.has(sp.kind)) return layers.floraAndSaplings;
+    return layers.lootAndStations;
+  });
+
+  const deconflicted = resolveDeconflictedAtlasLayout({
+    buildings: layers.buildingsAndSublocs ? cartography.buildings : [],
+    microSpawns: visibleSpawnsRaw,
+    subLocations: layers.buildingsAndSublocs ? cartography.subLocations : [],
+    areaLabels: region.areaLabels ?? [],
+    exitBanners: region.exitBanners ?? [],
+  });
+
+  // Голубые линии маршрутов Google-Street-View под интерактивными узлами прогулки
+  const streetViewLinesMarkup: string[] = [];
+  if (layers.streetViewRoutes && streetViewNodes.length > 0) {
+    const nodeById = new Map(streetViewNodes.map((n) => [n.id, n]));
+    for (const node of streetViewNodes) {
+      if (node.nextNodeId) {
+        const next = nodeById.get(node.nextNodeId);
+        if (next) {
+          streetViewLinesMarkup.push(
+            `<line x1="${node.x}" y1="${toSvgY(node.y)}" x2="${next.x}" y2="${toSvgY(next.y)}" stroke="#0ea5e9" stroke-width="5.2" stroke-linecap="round" opacity="0.24" />` +
+              `<line x1="${node.x}" y1="${toSvgY(node.y)}" x2="${next.x}" y2="${toSvgY(next.y)}" stroke="#0284c7" stroke-width="2" stroke-dasharray="6 5" stroke-linecap="round" opacity="0.88" />`,
+          );
+        }
+      }
+      if (node.branches) {
+        for (const br of node.branches) {
+          const target = nodeById.get(br.targetNodeId);
+          if (target) {
+            streetViewLinesMarkup.push(
+              `<line x1="${node.x}" y1="${toSvgY(node.y)}" x2="${target.x}" y2="${toSvgY(target.y)}" stroke="#38bdf8" stroke-width="1.6" stroke-dasharray="3 4" stroke-linecap="round" opacity="0.72" />`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   const ropesMarkup = layers.ropesAndRoutes
     ? cartography.ropes.map((r) => renderRopeSvg(r, isCharcoal))
     : [];
 
-  const spawnsMarkup = cartography.microSpawns
-    .filter((sp) => {
-      if (FAUNA_KINDS.has(sp.kind)) return layers.faunaAndCarcasses;
-      if (FLORA_KINDS.has(sp.kind)) return layers.floraAndSaplings;
-      return layers.lootAndStations;
-    })
-    .map((sp) => renderMicroSpawnSvg(sp.kind, sp.x, sp.y, difficulty, isCharcoal));
+  const spawnsMarkup = deconflicted.microSpawns.map((sp) => {
+    const leader = sp.wasShifted
+      ? `<line x1="${sp.origX}" y1="${toSvgY(sp.origY)}" x2="${sp.x}" y2="${toSvgY(sp.y)}" stroke="${inkPrimary}" stroke-width="0.9" stroke-dasharray="2 2" opacity="0.45" />`
+      : '';
+    return `${leader}${renderMicroSpawnSvg(sp.kind, sp.x, sp.y, difficulty, isCharcoal)}`;
+  });
 
   const buildingsMarkup = layers.buildingsAndSublocs
-    ? cartography.buildings.map((b) => renderBuildingSvg(b, isCharcoal))
+    ? cartography.buildings.map((b, idx) =>
+        renderBuildingSvg(b, isCharcoal, deconflicted.buildingCallouts[idx]),
+      )
     : [];
 
-  // 6. Второстепенные подлокации (синий штурманский курсив/капитель как на карте Stray Wolf!) + урочища
+  // 6. Второстепенные подлокации и урочища (гарантированно разнесены без наложения)
   const subLocMarkup: string[] = [];
   if (layers.buildingsAndSublocs) {
     const subFill = isCharcoal ? '#1e40af' : '#7dd3fc';
-    for (const sub of cartography.subLocations) {
+    for (const sub of deconflicted.subLocations) {
       subLocMarkup.push(`
-        <text x="${sub.x}" y="${toSvgY(sub.y)}" text-anchor="middle" fill="${subFill}" stroke="${haloColor}" stroke-width="3" stroke-linejoin="round" paint-order="stroke" font-family="Oswald, sans-serif" font-weight="700" font-size="8.6" letter-spacing="0.45">${escSvg(sub.labelRu)}</text>
+        <text x="${sub.x}" y="${toSvgY(sub.y)}" text-anchor="middle" fill="${subFill}" stroke="${haloColor}" stroke-width="3.1" stroke-linejoin="round" paint-order="stroke" font-family="Oswald, sans-serif" font-weight="700" font-size="8.6" letter-spacing="0.45">${escSvg(sub.text)}</text>
       `);
     }
   }
 
   const areaLabelsMarkup: string[] = [];
-  for (const lbl of region.areaLabels ?? []) {
+  for (const lbl of deconflicted.areaLabels) {
     const lx = lbl.x;
     const ly = toSvgY(lbl.y);
     const fill =
@@ -1081,7 +1180,7 @@ export function buildRegionCharcoalMapDataUrl(opts: {
 
     areaLabelsMarkup.push(`
       <g transform="translate(${lx}, ${ly})">
-        <text x="0" y="0" text-anchor="middle" fill="${fill}" stroke="${haloColor}" stroke-width="3.6" stroke-linejoin="round" paint-order="stroke" font-family="Oswald, sans-serif" font-weight="700" font-size="11" letter-spacing="0.7">${escSvg(lbl.textRu.toUpperCase())}</text>
+        <text x="0" y="0" text-anchor="middle" fill="${fill}" stroke="${haloColor}" stroke-width="3.6" stroke-linejoin="round" paint-order="stroke" font-family="Oswald, sans-serif" font-weight="700" font-size="11" letter-spacing="0.7">${escSvg(lbl.text)}</text>
       </g>
     `);
   }
@@ -1180,6 +1279,9 @@ export function buildRegionCharcoalMapDataUrl(opts: {
 
       <!-- 5. Дороги, тропы, ж/д полотно, мосты, водопады, изгороди и маршрут Незваного гостя -->
       <g>${pathLayer.join('')}</g>
+
+      <!-- 5b. Маршруты Street View прогулки -->
+      <g>${streetViewLinesMarkup.join('')}</g>
 
       <!-- 6. Альпинистские тросы со стрелками обрыва -->
       <g>${ropesMarkup.join('')}</g>
