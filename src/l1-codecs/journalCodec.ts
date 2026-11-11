@@ -65,6 +65,12 @@ export function parseSurvivorJournalJson(rawJson: string): SurvivorJournalState 
 
       const iconCandidate = noteObj.icon as CustomNoteIcon;
       const icon: CustomNoteIcon = VALID_ICONS.has(iconCandidate) ? iconCandidate : 'stash';
+      const itemsSummary = sanitizeUntrustedWikiText(noteObj.itemsSummary, 220);
+      const rawWeight = Number(noteObj.weightKg);
+      const weightKg =
+        Number.isFinite(rawWeight) && rawWeight > 0
+          ? Math.min(500, Math.round(rawWeight * 100) / 100)
+          : undefined;
 
       customNotes.push({
         id,
@@ -74,6 +80,8 @@ export function parseSurvivorJournalJson(rawJson: string): SurvivorJournalState 
         title,
         note,
         icon,
+        ...(itemsSummary ? { itemsSummary } : {}),
+        ...(weightKg !== undefined ? { weightKg } : {}),
         createdAt:
           typeof noteObj.createdAt === 'string'
             ? noteObj.createdAt.slice(0, 40)

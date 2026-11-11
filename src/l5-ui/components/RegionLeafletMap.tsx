@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import {
   ArrowRight,
+  Backpack,
   Camera,
   CheckCircle2,
   Circle,
@@ -13,7 +14,9 @@ import {
   Globe2,
   Layers,
   MapPinPlus,
+  Mountain,
   Navigation,
+  Pencil,
   RotateCcw,
   Sparkles,
   Tag,
@@ -28,19 +31,22 @@ import {
   MAP_CANVAS_SIZE,
   MARKER_CATEGORIES,
 } from '../../l0-primitives/constants.ts';
-import { clampMapCoord, formatGridSector } from '../../l0-primitives/textUtils.ts';
+import { formatGridSector, formatWeightKg } from '../../l0-primitives/textUtils.ts';
 import type {
+  CustomCharcoalNote,
   CustomNoteIcon,
   MapMarkerModel,
 } from '../../l0-primitives/types.ts';
 import { buildFandomWikiUrl } from '../../l1-codecs/fandomCodec.ts';
 import { deconflictLeafletMarkers } from '../../l2-models/deconflictCartography.ts';
+import { leafletCoordsToWorldXZ } from '../../l2-models/data/fandomMapsManifest.ts';
 import {
   computeRegionProgress,
   filterRegionMarkers,
   findStreetViewNodeForMarker,
   getAllRegions,
   getEffectiveLootLines,
+  getFandomMapMeta,
   getRegionById,
   getRegionLeopardTrixGuides,
   getRegionStreetViewNodes,
@@ -65,20 +71,27 @@ import { WorldIslandMap } from './WorldIslandMap.tsx';
 interface PendingNoteCoords {
   readonly x: number;
   readonly y: number;
+  readonly worldX: number;
+  readonly worldZ: number;
 }
 
 export function RegionLeafletMap() {
   const state = useCommandState();
   const allRegions = getAllRegions();
   const region = getRegionById(state.selectedRegionId);
+  const fandomMeta = getFandomMapMeta(region.id);
   const regionImg = getWikiImageUrl(region.imageKey);
   const diffMeta = DIFFICULTY_BY_ID[state.difficulty];
 
   const [markerSearch, setMarkerSearch] = useState('');
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [hoverCoords, setHoverCoords] = useState<PendingNoteCoords | null>(null);
+  const [clickedSpot, setClickedSpot] = useState<PendingNoteCoords | null>(null);
   const [pendingCoords, setPendingCoords] = useState<PendingNoteCoords | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteTitle, setNoteTitle] = useState('');
+  const [noteItemsSummary, setNoteItemsSummary] = useState('');
+  const [noteWeightKg, setNoteWeightKg] = useState('');
   const [noteBody, setNoteBody] = useState('');
   const [noteIcon, setNoteIcon] = useState<CustomNoteIcon>('stash');
   const [importError, setImportError] = useState<string | null>(null);
@@ -152,19 +165,21 @@ export function RegionLeafletMap() {
     const container = mapContainerRef.current;
     if (!container) return;
 
+    const sheetH = fandomMeta?.sheetH ?? MAP_SVG_LEAFLET_BOUNDS[1][0];
+    const sheetW = fandomMeta?.sheetW ?? MAP_SVG_LEAFLET_BOUNDS[1][1];
     const sheetBounds: L.LatLngBoundsExpression = [
-      [MAP_SVG_LEAFLET_BOUNDS[0][0], MAP_SVG_LEAFLET_BOUNDS[0][1]],
-      [MAP_SVG_LEAFLET_BOUNDS[1][0], MAP_SVG_LEAFLET_BOUNDS[1][1]],
+      [0, 0],
+      [sheetH, sheetW],
     ];
 
     const map = L.map(container, {
       crs: L.CRS.Simple,
-      minZoom: -0.8,
-      maxZoom: 3.5,
+      minZoom: -1.1,
+      maxZoom: 3.2,
       zoomSnap: 0.25,
       maxBounds: [
-        [-290, -180],
-        [MAP_CANVAS_SIZE + 180, MAP_CANVAS_SIZE + 180],
+        [-220, -220],
+        [sheetH + 220, sheetW + 220],
       ],
       attributionControl: false,
     });
@@ -181,34 +196,60 @@ export function RegionLeafletMap() {
       imageOverlayRef.current = null;
       markersLayerRef.current = null;
     };
-  }, [state.mapViewLevel]);
+  }, [state.mapViewLevel, region.id]);
 
-  // Обновление угольной подложки при смене региона, сложности, слоёв полотна или темы (пергамент / аврора)
+  // Загрузка точной карты Fandom (в стилизации пергамент / полярное сияние)
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map || state.mapViewLevel !== 'region') return;
 
-    const sheetBounds: L.LatLngBoundsExpression = [
-      [MAP_SVG_LEAFLET_BOUNDS[0][0], MAP_SVG_LEAFLET_BOUNDS[0][1]],
-      [MAP_SVG_LEAFLET_BOUNDS[1][0], MAP_SVG_LEAFLET_BOUNDS[1][1]],
-    ];
-    const svgUrl = buildRegionCharcoalMapDataUrl({
-      region,
-      theme: state.mapTheme,
-      difficulty: state.difficulty,
-      cartography,
-      showMicroDetails: state.showMapMicroDetails,
-      canvasLayers: state.canvasLayers,
-      streetViewNodes,
-    });
+    const themeClass =
+      state.mapTheme === 'aurora'
+        ? 'tld-fandom-sheet--aurora'
+        : 'tld-fandom-sheet--charcoal';
+
+    let overlayUrl: string;
+    let sheetBounds: L.LatLngBoundsExpression;
+
+    if (fandomMeta) {
+      overlayUrl = fandomMeta.file;
+      sheetBounds = [
+        [0, 0],
+        [fandomMeta.sheetH, fandomMeta.sheetW],
+      ];
+    } else {
+      sheetBounds = [
+        [MAP_SVG_LEAFLET_BOUNDS[0][0], MAP_SVG_LEAFLET_BOUNDS[0][1]],
+        [MAP_SVG_LEAFLET_BOUNDS[1][0], MAP_SVG_LEAFLET_BOUNDS[1][1]],
+      ];
+      overlayUrl = buildRegionCharcoalMapDataUrl({
+        region,
+        theme: state.mapTheme,
+        difficulty: state.difficulty,
+        cartography,
+        showMicroDetails: state.showMapMicroDetails,
+        canvasLayers: state.canvasLayers,
+        streetViewNodes,
+      });
+    }
 
     if (imageOverlayRef.current) {
-      imageOverlayRef.current.setUrl(svgUrl);
-    } else {
-      imageOverlayRef.current = L.imageOverlay(svgUrl, sheetBounds).addTo(map);
+      map.removeLayer(imageOverlayRef.current);
+      imageOverlayRef.current = null;
     }
+
+    const overlay = L.imageOverlay(overlayUrl, sheetBounds, {
+      className: themeClass,
+    }).addTo(map);
+    imageOverlayRef.current = overlay;
+
+    // Сброс локально выбранной точки при смене региона
+    setClickedSpot(null);
+    setPendingCoords(null);
+    setEditingNoteId(null);
   }, [
     region,
+    fandomMeta,
     state.mapTheme,
     state.difficulty,
     cartography,
@@ -218,24 +259,36 @@ export function RegionLeafletMap() {
     state.mapViewLevel,
   ]);
 
-  // Обработка клика и движения курсора по карте (живой квадрат сетки A1..H8)
+  // Обработка клика и движения курсора по карте (включая выбор любой случайной точки для 3D / схрона)
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
 
+    const toCoords = (latlng: L.LatLng): PendingNoteCoords => {
+      const sheetW = fandomMeta?.sheetW ?? MAP_CANVAS_SIZE;
+      const sheetH = fandomMeta?.sheetH ?? MAP_CANVAS_SIZE;
+      const lx = Math.max(0, Math.min(sheetW, Math.round(latlng.lng)));
+      const ly = Math.max(0, Math.min(sheetH, Math.round(latlng.lat)));
+      const world = fandomMeta
+        ? leafletCoordsToWorldXZ(fandomMeta, latlng.lng, latlng.lat)
+        : { worldX: lx, worldZ: ly };
+      return { x: lx, y: ly, worldX: world.worldX, worldZ: world.worldZ };
+    };
+
     const onMapClick = (e: L.LeafletMouseEvent) => {
-      if (!commandEngine.getState().isDrawingCustomNote) return;
-      setPendingCoords({
-        x: clampMapCoord(e.latlng.lng),
-        y: clampMapCoord(e.latlng.lat),
-      });
+      const coords = toCoords(e.latlng);
+      setEditingNoteId(null);
+      if (commandEngine.getState().isDrawingCustomNote) {
+        setClickedSpot(null);
+        setPendingCoords(coords);
+      } else {
+        setPendingCoords(null);
+        setClickedSpot(coords);
+      }
     };
 
     const onMouseMove = (e: L.LeafletMouseEvent) => {
-      setHoverCoords({
-        x: clampMapCoord(e.latlng.lng),
-        y: clampMapCoord(e.latlng.lat),
-      });
+      setHoverCoords(toCoords(e.latlng));
     };
 
     const onMouseOut = () => setHoverCoords(null);
@@ -248,9 +301,9 @@ export function RegionLeafletMap() {
       map.off('mousemove', onMouseMove);
       map.off('mouseout', onMouseOut);
     };
-  }, [state.mapViewLevel]);
+  }, [state.mapViewLevel, fandomMeta]);
 
-  // Рендеринг опасных радиусов хищников, разведённых без наложений маркеров, точек Street View и угольных заметок
+  // Рендеринг выбранной случайной точки, пользовательских схронов/заметок, узлов Street View и (по желанию) справочных пинов поверх атласа Fandom
   useEffect(() => {
     const map = leafletMapRef.current;
     const group = markersLayerRef.current;
@@ -258,100 +311,80 @@ export function RegionLeafletMap() {
 
     group.clearLayers();
 
-    for (const item of deconflictedMarkers) {
-      const { marker, displayX, displayY, isShifted, suppressLabelPill } = item;
-      const isVisited = visitedSet.has(marker.id);
-      const isFocused = activeMarker?.id === marker.id;
-      const sector = formatGridSector(marker.x, marker.y);
+    if (state.showWikiOverlayMarkers) {
+      for (const item of deconflictedMarkers) {
+        const { marker, displayX, displayY, isShifted, suppressLabelPill } = item;
+        const isVisited = visitedSet.has(marker.id);
+        const isFocused = activeMarker?.id === marker.id;
+        const sector = formatGridSector(marker.x, marker.y);
 
-      if (marker.dangerRadius && marker.dangerRadius > 0) {
-        L.circle([marker.y, marker.x], {
-          radius: marker.dangerRadius,
-          color: '#ef4444',
-          weight: 1.5,
-          dashArray: '5 5',
-          fillColor: '#ef4444',
-          fillOpacity: 0.09,
-          interactive: false,
-        }).addTo(group);
-      }
-
-      if (isShifted) {
-        L.polyline(
-          [
-            [marker.y, marker.x],
-            [displayY, displayX],
-          ],
-          {
-            color: '#f59e0b',
-            weight: 1.4,
-            dashArray: '3 3',
-            opacity: 0.8,
+        if (marker.dangerRadius && marker.dangerRadius > 0) {
+          L.circle([marker.y, marker.x], {
+            radius: marker.dangerRadius,
+            color: '#ef4444',
+            weight: 1.5,
+            dashArray: '5 5',
+            fillColor: '#ef4444',
+            fillOpacity: 0.09,
             interactive: false,
-          },
-        ).addTo(group);
-      }
+          }).addTo(group);
+        }
 
-      const leafletMarker = L.marker([displayY, displayX], {
-        zIndexOffset: isFocused ? 1000 : 0,
-        icon: createCharcoalLeafletIcon({
-          category: marker.category,
-          isVisited,
-          isFocused,
-          labelRu: marker.nameRu,
-          showLabel: state.showMarkerLabels && !suppressLabelPill,
-        }),
-      });
-
-      leafletMarker.bindTooltip(
-        `<div style="font-weight:700;font-size:12px;">[${sector}] ${marker.nameRu}${isVisited ? ' ✓' : ''}</div>` +
-          (marker.landmarkHintRu
-            ? `<div style="font-size:11px;color:#cbd5e1;max-width:240px;white-space:normal;margin-top:2px;">🧭 ${marker.landmarkHintRu}</div>`
-            : ''),
-        { direction: 'top', offset: [0, -16] },
-      );
-
-      leafletMarker.on('click', () => {
-        setSelectedMarkerId(marker.id);
-        executeCommand('map.focusMarker', { markerId: marker.id });
-      });
-
-      leafletMarker.addTo(group);
-
-      if (state.focusedMarkerId === marker.id) {
-        map.flyTo([displayY, displayX], Math.max(map.getZoom(), 0.6), {
-          duration: 0.45,
-        });
-      }
-    }
-
-    // Узлы интерактивной прогулки Google Street View (с лёгким смещением от центра здания, чтобы не перекрывать пины!)
-    if (state.canvasLayers.streetViewRoutes) {
-      for (const sv of streetViewNodes) {
-        const collidesMarker = deconflictedMarkers.some(
-          (dm) => Math.hypot(dm.displayX - sv.x, dm.displayY - sv.y) < 18,
-        );
-        const svX = collidesMarker ? Math.min(975, sv.x + 17) : sv.x;
-        const svY = collidesMarker ? Math.max(25, sv.y - 16) : sv.y;
-
-        if (collidesMarker) {
+        if (isShifted) {
           L.polyline(
             [
-              [sv.y, sv.x],
-              [svY, svX],
+              [marker.y, marker.x],
+              [displayY, displayX],
             ],
             {
-              color: '#38bdf8',
-              weight: 1.5,
-              dashArray: '2 3',
-              opacity: 0.85,
+              color: '#f59e0b',
+              weight: 1.4,
+              dashArray: '3 3',
+              opacity: 0.8,
               interactive: false,
             },
           ).addTo(group);
         }
 
+        const leafletMarker = L.marker([displayY, displayX], {
+          zIndexOffset: isFocused ? 1000 : 0,
+          icon: createCharcoalLeafletIcon({
+            category: marker.category,
+            isVisited,
+            isFocused,
+            labelRu: marker.nameRu,
+            showLabel: state.showMarkerLabels && !suppressLabelPill,
+          }),
+        });
+
+        leafletMarker.bindTooltip(
+          `<div style="font-weight:700;font-size:12px;">[${sector}] ${marker.nameRu}${isVisited ? ' ✓' : ''}</div>` +
+            (marker.landmarkHintRu
+              ? `<div style="font-size:11px;color:#cbd5e1;max-width:240px;white-space:normal;margin-top:2px;">🧭 ${marker.landmarkHintRu}</div>`
+              : ''),
+          { direction: 'top', offset: [0, -16] },
+        );
+
+        leafletMarker.on('click', () => {
+          setSelectedMarkerId(marker.id);
+          executeCommand('map.focusMarker', { markerId: marker.id });
+        });
+
+        leafletMarker.addTo(group);
+
+        if (state.focusedMarkerId === marker.id) {
+          map.flyTo([displayY, displayX], Math.max(map.getZoom(), 0.6), {
+            duration: 0.45,
+          });
+        }
+      }
+    }
+
+    // Узлы интерактивной прогулки LeopardTriX Street View
+    if (state.canvasLayers.streetViewRoutes) {
+      for (const sv of streetViewNodes) {
         const isActiveSv = state.activeStreetViewNodeId === sv.id;
-        const svMarker = L.marker([svY, svX], {
+        const svMarker = L.marker([sv.y, sv.x], {
           zIndexOffset: isActiveSv ? 1200 : 400,
           icon: createStreetViewNodeLeafletIcon({
             isActive: isActiveSv,
@@ -361,7 +394,7 @@ export function RegionLeafletMap() {
 
         svMarker.bindTooltip(
           `<div style="font-weight:700;font-size:12px;color:#7dd3fc;">🚶 Street View: ${sv.titleRu}</div>` +
-            `<div style="font-size:11px;color:#cbd5e1;margin-top:2px;">Кликните, чтобы войти в вид от 1-го лица и шагать по маршруту</div>`,
+            `<div style="font-size:11px;color:#cbd5e1;margin-top:2px;">Кликните для просмотра маршрута по кадрам видео</div>`,
           { direction: 'top', offset: [0, -12] },
         );
 
@@ -376,26 +409,54 @@ export function RegionLeafletMap() {
       }
     }
 
+    // Пользовательские заметки и схроны выжившего
     for (const custom of regionCustomNotes) {
-      const sector = formatGridSector(custom.x, custom.y);
+      const world = fandomMeta
+        ? leafletCoordsToWorldXZ(fandomMeta, custom.x, custom.y)
+        : { worldX: custom.x, worldZ: custom.y };
       const noteMarker = L.marker([custom.y, custom.x], {
-        icon: createCustomNoteLeafletIcon(custom.icon),
+        zIndexOffset: 900,
+        icon: createCustomNoteLeafletIcon(custom.icon, {
+          title: custom.title,
+          weightKg: custom.weightKg,
+        }),
       });
+      const stashBlock = custom.itemsSummary
+        ? `<div style="margin-top:4px;padding:4px 6px;border-radius:5px;background:#16110a;border:1px solid #594122;font-size:11px;color:#fde68a;">🎒 ${custom.itemsSummary}${custom.weightKg ? ` <strong>(${formatWeightKg(custom.weightKg)})</strong>` : ''}</div>`
+        : custom.weightKg
+          ? `<div style="margin-top:4px;font-size:11px;color:#fde68a;">⚖️ Оставлено: ${formatWeightKg(custom.weightKg)}</div>`
+          : '';
       noteMarker.bindPopup(
-        `<div style="min-width:180px;">
-          <div style="font-weight:700;color:#ffd699;margin-bottom:4px;">✏️ ${custom.title}</div>
-          <div style="font-size:12px;color:#cbd5e1;">${custom.note || 'Угольная пометка выжившего'}</div>
-          <div style="font-size:10px;color:#788b9c;margin-top:6px;">Квадрат ${sector} (X:${custom.x}, Y:${custom.y})</div>
+        `<div style="min-width:190px;">
+          <div style="font-weight:700;color:#ffd699;margin-bottom:4px;">📌 ${custom.title}</div>
+          <div style="font-size:12px;color:#cbd5e1;">${custom.note || 'Метка выжившего'}</div>
+          ${stashBlock}
+          <div style="font-size:10px;color:#788b9c;margin-top:6px;">Координаты игры: X ${world.worldX}м, Z ${world.worldZ}м</div>
         </div>`,
       );
       noteMarker.addTo(group);
     }
+
+    // Прицел кликнутой случайной точки (для 3D / новой заметки)
+    if (clickedSpot) {
+      L.circleMarker([clickedSpot.y, clickedSpot.x], {
+        radius: 9,
+        color: '#f97316',
+        weight: 2.5,
+        fillColor: '#fb923c',
+        fillOpacity: 0.3,
+        interactive: false,
+      }).addTo(group);
+    }
   }, [
     deconflictedMarkers,
     streetViewNodes,
+    state.showWikiOverlayMarkers,
     state.canvasLayers.streetViewRoutes,
     state.activeStreetViewNodeId,
     regionCustomNotes,
+    clickedSpot,
+    fandomMeta,
     visitedSet,
     activeMarker?.id,
     state.focusedMarkerId,
@@ -403,20 +464,58 @@ export function RegionLeafletMap() {
     state.showMarkerLabels,
   ]);
 
+  const resetNoteForm = () => {
+    setPendingCoords(null);
+    setEditingNoteId(null);
+    setNoteTitle('');
+    setNoteItemsSummary('');
+    setNoteWeightKg('');
+    setNoteBody('');
+    setNoteIcon('stash');
+  };
+
+  const startEditingNote = (n: CustomCharcoalNote) => {
+    const world = fandomMeta
+      ? leafletCoordsToWorldXZ(fandomMeta, n.x, n.y)
+      : { worldX: n.x, worldZ: n.y };
+    setClickedSpot(null);
+    setEditingNoteId(n.id);
+    setPendingCoords({ x: n.x, y: n.y, worldX: world.worldX, worldZ: world.worldZ });
+    setNoteTitle(n.title);
+    setNoteItemsSummary(n.itemsSummary ?? '');
+    setNoteWeightKg(n.weightKg ? String(n.weightKg) : '');
+    setNoteBody(n.note);
+    setNoteIcon(n.icon);
+  };
+
   const handleSaveCustomNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!pendingCoords) return;
-    executeCommand('survivor.addCustomNote', {
-      regionId: region.id,
-      x: pendingCoords.x,
-      y: pendingCoords.y,
-      title: noteTitle || 'Схрон выжившего',
-      note: noteBody,
-      icon: noteIcon,
-    });
-    setPendingCoords(null);
-    setNoteTitle('');
-    setNoteBody('');
+    const parsedWeight = Number(noteWeightKg.replace(',', '.'));
+    const weightKg = Number.isFinite(parsedWeight) && parsedWeight > 0 ? parsedWeight : undefined;
+
+    if (editingNoteId) {
+      executeCommand('survivor.updateCustomNote', {
+        noteId: editingNoteId,
+        title: noteTitle || 'Схрон выжившего',
+        note: noteBody,
+        icon: noteIcon,
+        itemsSummary: noteItemsSummary,
+        weightKg,
+      });
+    } else {
+      executeCommand('survivor.addCustomNote', {
+        regionId: region.id,
+        x: pendingCoords.x,
+        y: pendingCoords.y,
+        title: noteTitle || 'Схрон выжившего',
+        note: noteBody,
+        icon: noteIcon,
+        itemsSummary: noteItemsSummary,
+        weightKg,
+      });
+    }
+    resetNoteForm();
   };
 
   const handleExportJournal = () => {
@@ -522,30 +621,32 @@ export function RegionLeafletMap() {
 
                 <button
                   type="button"
-                  onClick={() => executeCommand('map.toggleMicroDetails', {})}
+                  onClick={() => executeCommand('map.toggleWikiOverlayMarkers', {})}
                   className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                    state.showMapMicroDetails
+                    state.showWikiOverlayMarkers
                       ? 'border-emerald-500/50 bg-emerald-950/35 text-emerald-200'
                       : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
                   }`}
-                  title="Показать или скрыть мелкие иконки животных, трав, саженцев и лута на самом холсте карты"
+                  title="Иконки самой карты Fandom всегда сохраняются; здесь можно включить или скрыть дополнительные интерактивные пины справки поверх"
                 >
                   <Layers className="h-3.5 w-3.5 text-emerald-400" />
-                  Фауна / Травы / Лут: {state.showMapMicroDetails ? 'Вкл' : 'Скрыты'}
+                  Справ. пины поверх: {state.showWikiOverlayMarkers ? 'Вкл' : 'Чистый атлас'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => executeCommand('map.toggleMarkerLabels', {})}
-                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                    state.showMarkerLabels
-                      ? 'border-[#d97724]/60 bg-[#d97724]/15 text-[#ffd699]'
-                      : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
-                  }`}
-                >
-                  <Tag className="h-3.5 w-3.5 text-[#f09a3e]" />
-                  Плашки маркеров: {state.showMarkerLabels ? 'Вкл' : 'Скрыты'}
-                </button>
+                {state.showWikiOverlayMarkers && (
+                  <button
+                    type="button"
+                    onClick={() => executeCommand('map.toggleMarkerLabels', {})}
+                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      state.showMarkerLabels
+                        ? 'border-[#d97724]/60 bg-[#d97724]/15 text-[#ffd699]'
+                        : 'border-[#32465a] bg-[#16222d] text-[#9eb2c4]'
+                    }`}
+                  >
+                    <Tag className="h-3.5 w-3.5 text-[#f09a3e]" />
+                    Подписи: {state.showMarkerLabels ? 'Вкл' : 'Скрыты'}
+                  </button>
+                )}
               </>
             )}
 
@@ -759,37 +860,99 @@ export function RegionLeafletMap() {
               </p>
             </div>
 
-            {/* Пользовательские угольные заметки и Бэкап дневника */}
+            {/* Пользовательские заметки / схроны лута и Бэкап дневника */}
             <div className="rounded-xl border border-[#2a3b4c] bg-[#121b24] p-4">
-              <h3 className="text-xs font-semibold tracking-wider text-[#9db0c0] uppercase">
-                Мои угольные заметки ({regionCustomNotes.length})
-              </h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-[#9db0c0] uppercase">
+                  <Backpack className="h-3.5 w-3.5 text-amber-400" />
+                  Заметки и схроны ({regionCustomNotes.length})
+                </h3>
+                {regionCustomNotes.some((n) => (n.weightKg ?? 0) > 0) && (
+                  <span className="rounded bg-amber-950/60 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300">
+                    {formatWeightKg(
+                      regionCustomNotes.reduce((acc, n) => acc + (n.weightKg ?? 0), 0),
+                    )}
+                  </span>
+                )}
+              </div>
               {regionCustomNotes.length === 0 ? (
                 <p className="mt-2 text-xs text-[#778c9e]">
-                  Пока нет заметок в этом регионе. Нажмите «Нанести свою метку углём», чтобы отметить схрон с мясом или шкурами.
+                  Кликните в любую точку карты — сможете оставить там схрон с лишним лутом (кг, список предметов) или осмотреть место в 3D.
                 </p>
               ) : (
-                <ul className="mt-2 max-h-36 space-y-1.5 overflow-y-auto text-xs">
-                  {regionCustomNotes.map((n) => (
-                    <li
-                      key={n.id}
-                      className="flex items-center justify-between rounded border border-[#263646] bg-[#0d151c] px-2.5 py-1.5"
-                    >
-                      <span className="truncate font-medium text-[#ffd699]">
-                        [{formatGridSector(n.x, n.y)}] {n.title}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          executeCommand('survivor.removeCustomNote', { noteId: n.id })
-                        }
-                        className="ml-2 cursor-pointer text-rose-400 hover:text-rose-300"
-                        title="Удалить заметку"
+                <ul className="mt-2.5 max-h-56 space-y-2 overflow-y-auto text-xs">
+                  {regionCustomNotes.map((n) => {
+                    const world = fandomMeta
+                      ? leafletCoordsToWorldXZ(fandomMeta, n.x, n.y)
+                      : { worldX: n.x, worldZ: n.y };
+                    return (
+                      <li
+                        key={n.id}
+                        className="rounded-lg border border-[#263646] bg-[#0d151c] p-2.5"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </li>
-                  ))}
+                        <div className="flex items-start justify-between gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              leafletMapRef.current?.flyTo([n.y, n.x], 1.2, { duration: 0.4 });
+                            }}
+                            className="min-w-0 cursor-pointer text-left font-semibold text-[#ffd699] hover:underline"
+                          >
+                            {n.title}
+                          </button>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                executeCommand('terrain3d.openPoint', {
+                                  regionId: region.id,
+                                  leafletX: n.x,
+                                  leafletY: n.y,
+                                  worldX: world.worldX,
+                                  worldZ: world.worldZ,
+                                })
+                              }
+                              className="cursor-pointer rounded bg-[#152432] p-1 text-sky-300 hover:bg-sky-900/50"
+                              title="Посмотреть это место в 3D"
+                            >
+                              <Mountain className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEditingNote(n)}
+                              className="cursor-pointer rounded bg-[#18222d] p-1 text-amber-300 hover:bg-[#243242]"
+                              title="Изменить список лута / заметку"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                executeCommand('survivor.removeCustomNote', { noteId: n.id })
+                              }
+                              className="cursor-pointer rounded bg-[#231519] p-1 text-rose-400 hover:bg-rose-950/60"
+                              title="Удалить заметку"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        {n.itemsSummary && (
+                          <div className="mt-1 text-[11px] text-[#e8d5b5]">
+                            🎒 {n.itemsSummary}
+                            {n.weightKg ? (
+                              <strong className="ml-1 text-amber-300">
+                                ({formatWeightKg(n.weightKg)})
+                              </strong>
+                            ) : null}
+                          </div>
+                        )}
+                        {n.note && (
+                          <div className="mt-0.5 text-[11px] text-[#8fa3b5]">{n.note}</div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
 
@@ -830,21 +993,69 @@ export function RegionLeafletMap() {
             <div className="relative overflow-hidden rounded-xl border-2 border-[#354656] bg-[#10171d] shadow-2xl">
               {state.isDrawingCustomNote && (
                 <div className="absolute top-3 left-1/2 z-[500] -translate-x-1/2 rounded-full border border-amber-400/80 bg-[#1e160d]/95 px-4 py-1.5 text-xs font-semibold text-amber-200 shadow-lg">
-                  ✏️ Кликните в любую точку карты, чтобы сделать пометку углём
+                  ✏️ Кликните в любую точку карты, чтобы поставить метку / схрон
                 </div>
               )}
 
-              {/* Живой индикатор сектора сетки под курсором */}
-              <div className="pointer-events-none absolute bottom-3 left-3 z-[450] rounded-md border border-[#33485c] bg-[#0b1219]/90 px-2.5 py-1 font-mono text-[11px] text-[#e4dfd5] shadow">
+              {clickedSpot && !pendingCoords && !state.isDrawingCustomNote && (
+                <div className="absolute top-3 left-1/2 z-[500] flex max-w-[95%] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-amber-400/75 bg-[#0e161ee8] px-3 py-2 text-xs shadow-2xl backdrop-blur">
+                  <span className="font-mono font-bold text-[#ffd699]">
+                    📍 X:{clickedSpot.worldX} Z:{clickedSpot.worldZ}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      executeCommand('terrain3d.openPoint', {
+                        regionId: region.id,
+                        leafletX: clickedSpot.x,
+                        leafletY: clickedSpot.y,
+                        worldX: clickedSpot.worldX,
+                        worldZ: clickedSpot.worldZ,
+                      })
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-[#0284c7] px-2.5 py-1 font-bold text-white hover:bg-[#0ea5e9]"
+                  >
+                    <Mountain className="h-3.5 w-3.5" /> Воссоздать в 3D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingCoords(clickedSpot);
+                      setClickedSpot(null);
+                      setEditingNoteId(null);
+                      setNoteTitle('');
+                      setNoteItemsSummary('');
+                      setNoteWeightKg('');
+                      setNoteBody('');
+                    }}
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-[#d97724] px-2.5 py-1 font-bold text-[#0b1116] hover:bg-[#f09a3e]"
+                  >
+                    <Backpack className="h-3.5 w-3.5" /> Оставить схрон
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClickedSpot(null)}
+                    className="cursor-pointer rounded px-1.5 py-0.5 text-[#9cb0c2] hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Живой индикатор мировых координат игры под курсором */}
+              <div className="pointer-events-none absolute bottom-3 left-3 z-[450] rounded-md border border-[#33485c] bg-[#0b1219]/92 px-2.5 py-1 font-mono text-[11px] text-[#e4dfd5] shadow">
                 {hoverCoords ? (
                   <>
-                    Квадрат: <strong className="text-[#ffd699]">{formatGridSector(hoverCoords.x, hoverCoords.y)}</strong>{' '}
-                    <span className="text-[#8ea3b5]">
-                      (X:{hoverCoords.x}, Y:{hoverCoords.y})
-                    </span>
+                    Координаты игры:{' '}
+                    <strong className="text-[#ffd699]">
+                      X {hoverCoords.worldX}м, Z {hoverCoords.worldZ}м
+                    </strong>{' '}
+                    <span className="text-[#8ea3b5]">• Кликните для 3D или заметки</span>
                   </>
                 ) : (
-                  <span className="text-[#9cb0c2]">Сетка A1–H8 • Колесо мыши — глубокий зум до улиц</span>
+                  <span className="text-[#9cb0c2]">
+                    Клик в любую точку карты: 3D-вид местности по файлам игры или схрон лута
+                  </span>
                 )}
               </div>
 
@@ -893,7 +1104,62 @@ export function RegionLeafletMap() {
               />
             </div>
 
-            {/* Модальная форма добавления угольной заметки при клике по карте */}
+            {/* Быстрая панель действий при клике в любую случайную точку карты */}
+            {clickedSpot && !pendingCoords && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/60 bg-[#15202b] p-3.5 shadow-xl">
+                <div>
+                  <div className="text-xs font-bold text-[#ffd699] uppercase">
+                    📍 Выбрана точка на карте • Координаты X: {clickedSpot.worldX}м, Z: {clickedSpot.worldZ}м
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[#9bb0c2]">
+                    Воссоздайте 3D-местность вокруг этой точки (рельеф и постройки из игры) или отметьте свой схрон:
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      executeCommand('terrain3d.openPoint', {
+                        regionId: region.id,
+                        leafletX: clickedSpot.x,
+                        leafletY: clickedSpot.y,
+                        worldX: clickedSpot.worldX,
+                        worldZ: clickedSpot.worldZ,
+                      })
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#0284c7] px-3.5 py-2 text-xs font-bold text-white shadow transition hover:bg-[#0ea5e9]"
+                  >
+                    <Mountain className="h-4 w-4" />
+                    Воссоздать место в 3D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingCoords(clickedSpot);
+                      setClickedSpot(null);
+                      setEditingNoteId(null);
+                      setNoteTitle('');
+                      setNoteItemsSummary('');
+                      setNoteWeightKg('');
+                      setNoteBody('');
+                    }}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#d97724] px-3.5 py-2 text-xs font-bold text-[#0b1116] shadow transition hover:bg-[#f09a3e]"
+                  >
+                    <Backpack className="h-4 w-4" />
+                    Я здесь / Оставить схрон лута
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClickedSpot(null)}
+                    className="cursor-pointer rounded-lg border border-[#304355] px-2.5 py-2 text-xs text-[#9cb0c2] hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Модальная форма добавления/редактирования заметки и схрона лута */}
             {pendingCoords && (
               <form
                 onSubmit={handleSaveCustomNote}
@@ -901,12 +1167,11 @@ export function RegionLeafletMap() {
               >
                 <div className="flex items-center justify-between">
                   <h4 className="font-tld-display text-sm font-bold text-[#ffd699] uppercase">
-                    Новая угольная заметка • Сектор {formatGridSector(pendingCoords.x, pendingCoords.y)} (X:
-                    {pendingCoords.x}, Y:{pendingCoords.y})
+                    {editingNoteId ? 'Редактировать заметку / схрон' : 'Новый схрон / метка на карте'} • X:{pendingCoords.worldX}м, Z:{pendingCoords.worldZ}м
                   </h4>
                   <button
                     type="button"
-                    onClick={() => setPendingCoords(null)}
+                    onClick={resetNoteForm}
                     className="cursor-pointer text-xs text-[#8ea3b5] hover:text-white"
                   >
                     Отмена
@@ -919,7 +1184,7 @@ export function RegionLeafletMap() {
                     required
                     value={noteTitle}
                     onChange={(e) => setNoteTitle(e.target.value)}
-                    placeholder="Заголовок (напр. Схрон 20 кг лося)"
+                    placeholder="Название (напр. Схрон у камня / Я тут)"
                     className="rounded border border-[#314559] bg-[#0c1319] px-3 py-1.5 text-xs text-white sm:col-span-2"
                   />
                   <select
@@ -927,25 +1192,59 @@ export function RegionLeafletMap() {
                     onChange={(e) => setNoteIcon(e.target.value as CustomNoteIcon)}
                     className="rounded border border-[#314559] bg-[#0c1319] px-2.5 py-1.5 text-xs text-white"
                   >
-                    <option value="stash">✕ Тайник / Лут</option>
-                    <option value="camp">🔥 Временный лагерь</option>
-                    <option value="danger">! Опасность / Хищник</option>
-                    <option value="arrow">➤ Ориентир тропы</option>
+                    <option value="stash">🎒 Схрон лута / Место выгрузки</option>
+                    <option value="arrow">📍 Я сейчас здесь</option>
+                    <option value="camp">🔥 Временный лагерь / Костёр</option>
+                    <option value="danger">⚠️ Опасность / Волк / Медведь</option>
                   </select>
                 </div>
+
+                <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-4">
+                  <input
+                    type="text"
+                    value={noteItemsSummary}
+                    onChange={(e) => setNoteItemsSummary(e.target.value)}
+                    placeholder="Что оставил (напр. 12 кг оленины, 4 л воды, топор, уголь)..."
+                    className="rounded border border-[#314559] bg-[#0c1319] px-3 py-1.5 text-xs text-white sm:col-span-3"
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={noteWeightKg}
+                    onChange={(e) => setNoteWeightKg(e.target.value)}
+                    placeholder="Вес (кг), напр. 18.5"
+                    className="rounded border border-[#314559] bg-[#0c1319] px-3 py-1.5 text-xs text-white"
+                  />
+                </div>
+
                 <input
                   type="text"
                   value={noteBody}
                   onChange={(e) => setNoteBody(e.target.value)}
-                  placeholder="Подробности (дрова, вода, шкуры на просушке)..."
+                  placeholder="Дополнительная заметка (под какой елью, забирать по пути назад)..."
                   className="mt-2.5 w-full rounded border border-[#314559] bg-[#0c1319] px-3 py-1.5 text-xs text-white"
                 />
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex flex-wrap justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      executeCommand('terrain3d.openPoint', {
+                        regionId: region.id,
+                        leafletX: pendingCoords.x,
+                        leafletY: pendingCoords.y,
+                        worldX: pendingCoords.worldX,
+                        worldZ: pendingCoords.worldZ,
+                      })
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1 rounded border border-sky-500/40 bg-sky-950/35 px-3 py-1.5 text-xs font-semibold text-sky-200 hover:bg-sky-900/45"
+                  >
+                    <Mountain className="h-3.5 w-3.5" /> Проверить это место в 3D
+                  </button>
                   <button
                     type="submit"
                     className="cursor-pointer rounded-md bg-[#d97724] px-4 py-1.5 text-xs font-bold text-[#0b1116] hover:bg-[#f09a3e]"
                   >
-                    Сохранить на карту
+                    {editingNoteId ? 'Обновить заметку' : 'Сохранить на карту'}
                   </button>
                 </div>
               </form>

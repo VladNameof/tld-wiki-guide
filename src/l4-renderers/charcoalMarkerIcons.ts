@@ -146,35 +146,66 @@ export function createStreetViewNodeLeafletIcon(opts: {
   });
 }
 
-export function createCustomNoteLeafletIcon(icon: CustomNoteIcon): L.DivIcon {
+export function createCustomNoteLeafletIcon(
+  icon: CustomNoteIcon,
+  opts?: { readonly title?: string; readonly weightKg?: number },
+): L.DivIcon {
   const glyph =
-    icon === 'danger' ? '!' : icon === 'camp' ? '🔥' : icon === 'arrow' ? '➤' : '✕';
-  const color = icon === 'danger' ? '#ef4444' : '#f59e0b';
+    icon === 'danger' ? '!' : icon === 'camp' ? '🔥' : icon === 'arrow' ? '📍' : '🎒';
+  const color =
+    icon === 'danger' ? '#ef4444' : icon === 'camp' ? '#fb923c' : icon === 'arrow' ? '#38bdf8' : '#f59e0b';
+
+  const badgeText = opts?.weightKg
+    ? `${opts.weightKg} кг`
+    : opts?.title
+      ? escHtml(opts.title.length > 16 ? `${opts.title.slice(0, 15)}…` : opts.title)
+      : '';
+
+  const labelEl = badgeText
+    ? `<div style="
+        position: absolute;
+        top: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background: rgba(18, 25, 32, 0.94);
+        color: #fde68a;
+        border: 1px solid ${color};
+        border-radius: 5px;
+        padding: 1px 6px;
+        font-family: Inter, sans-serif;
+        font-size: 10px;
+        font-weight: 700;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.65);
+      ">${badgeText}</div>`
+    : '';
 
   const html = `
-    <div style="
-      width: 26px;
-      height: 26px;
-      border-radius: 6px;
-      transform: rotate(-6deg);
-      background: #231c14;
-      border: 2px dashed ${color};
-      color: ${color};
-      font-family: Oswald, sans-serif;
-      font-weight: 700;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.7);
-    ">${glyph}</div>
+    <div style="position: relative; width: 28px; height: 28px;">
+      <div style="
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: rgba(25, 20, 15, 0.95);
+        border: 2px solid ${color};
+        color: ${color};
+        font-family: Oswald, sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.45), 0 4px 10px rgba(0,0,0,0.8);
+      ">${glyph}</div>
+      ${labelEl}
+    </div>
   `;
 
   return L.divIcon({
     className: 'tld-custom-note-marker',
     html,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-    popupAnchor: [0, -13],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14],
   });
 }

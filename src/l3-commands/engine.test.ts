@@ -317,12 +317,44 @@ describe('L3 Command Engine — Everything is a Command', () => {
       x: 512,
       y: 418,
       title: 'Мой схрон у печки',
-      note: '15 кг оленины и 4 л воды',
+      note: 'Заберу по дороге с Одинокой топи',
+      itemsSummary: '15 кг оленины и 4 л воды',
+      weightKg: 19.25,
       icon: 'stash',
     });
 
+    const added = engine.getState().journal.customNotes[0];
     expect(engine.getState().journal.customNotes).toHaveLength(1);
-    expect(engine.getState().journal.customNotes[0]?.title).toBe('Мой схрон у печки');
+    expect(added?.title).toBe('Мой схрон у печки');
+    expect(added?.itemsSummary).toBe('15 кг оленины и 4 л воды');
+    expect(added?.weightKg).toBe(19.25);
+
+    engine.execute('survivor.updateCustomNote', {
+      noteId: added!.id,
+      title: 'Остаток схрона',
+      note: 'Мясо съел, оставил воду',
+      itemsSummary: '4 л воды',
+      weightKg: 4,
+      icon: 'stash',
+    });
+    expect(engine.getState().journal.customNotes[0]?.weightKg).toBe(4);
+    expect(engine.getState().journal.customNotes[0]?.title).toBe('Остаток схрона');
+
+    expect(engine.getState().showWikiOverlayMarkers).toBe(false);
+    engine.execute('map.toggleWikiOverlayMarkers', {});
+    expect(engine.getState().showWikiOverlayMarkers).toBe(true);
+
+    engine.execute('terrain3d.openPoint', {
+      regionId: 'coastal-highway',
+      leafletX: 480,
+      leafletY: 390,
+      worldX: -120,
+      worldZ: 450,
+    });
+    expect(engine.getState().active3DLocation?.regionId).toBe('coastal-highway');
+    expect(engine.getState().active3DLocation?.worldX).toBe(-120);
+    engine.execute('terrain3d.close', {});
+    expect(engine.getState().active3DLocation).toBeNull();
 
     engine.execute('map.setDifficulty', { difficulty: 'misery' });
     expect(engine.getState().difficulty).toBe('misery');

@@ -30,13 +30,17 @@ export type CustomNoteIcon = 'stash' | 'danger' | 'camp' | 'arrow';
 export interface CustomCharcoalNote {
   readonly id: string;
   readonly regionId: string;
-  /** Нормализованная координата X на карте региона (0..1000) */
+  /** Нормализованная координата X на листе карты (0..sheetW <= 1000) */
   readonly x: number;
-  /** Нормализованная координата Y на карте региона (0..1000, снизу вверх в L.CRS.Simple) */
+  /** Нормализованная координата Y на листе карты (0..sheetH <= 1000, снизу вверх) */
   readonly y: number;
   readonly title: string;
   readonly note: string;
   readonly icon: CustomNoteIcon;
+  /** Опциональный список оставленного лута / припасов */
+  readonly itemsSummary?: string;
+  /** Общий вес оставленного схрона в кг */
+  readonly weightKg?: number;
   readonly createdAt: string;
 }
 
@@ -410,4 +414,75 @@ export interface FandomSyncedArticle {
   readonly url: string;
   readonly thumbnail: string | null;
   readonly syncedAt: string;
+}
+
+export interface FandomMapSheetMeta {
+  readonly regionId: string;
+  readonly file: string;
+  readonly sourceFile: string;
+  readonly imgW: number;
+  readonly imgH: number;
+  /** Длинная сторона всегда 1000 в L.CRS.Simple — сохраняет 1:1 пропорции без искажений */
+  readonly sheetW: number;
+  readonly sheetH: number;
+  readonly x0Px: number;
+  readonly xStepPx: number;
+  readonly x0Val: number;
+  readonly xStepVal: number;
+  readonly z0Px: number;
+  readonly zStepPx: number;
+  readonly z0Val: number;
+  readonly zStepVal: number;
+  /** В ряде карт Stray Wolf мировые оси X и Z повёрнуты на 90° относительно сетки листа (PV, BR) */
+  readonly swapWorldXZ?: boolean;
+}
+
+export interface Terrain3DWaterPlane {
+  readonly name: string;
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+  readonly y: number;
+}
+
+export type Terrain3DStructureKind =
+  | 'building'
+  | 'trailer'
+  | 'tower'
+  | 'bridge'
+  | 'cave'
+  | 'vehicle'
+  | 'road';
+
+export interface Terrain3DRawJson {
+  readonly regionId: string;
+  readonly gridRes: number;
+  readonly bounds: {
+    readonly minX: number;
+    readonly maxX: number;
+    readonly minZ: number;
+    readonly maxZ: number;
+    readonly minY: number;
+    readonly maxY: number;
+  };
+  readonly terrains: readonly string[];
+  readonly waterPlanes: readonly Terrain3DWaterPlane[];
+  /** [labelName, worldX, worldY, worldZ] */
+  readonly labels: readonly (readonly [string, number, number, number])[];
+  /** [kind, prefabName, worldX, worldY, worldZ, yawRad] */
+  readonly structures: readonly (readonly [Terrain3DStructureKind, string, number, number, number, number])[];
+  /** [worldX, worldY, worldZ] */
+  readonly rocks: readonly (readonly [number, number, number])[];
+  /** [worldX, worldY, worldZ] */
+  readonly trees: readonly (readonly [number, number, number])[];
+  readonly heightGridU16B64: string;
+}
+
+export interface Active3DPointTarget {
+  readonly regionId: string;
+  readonly leafletX: number;
+  readonly leafletY: number;
+  readonly worldX: number;
+  readonly worldZ: number;
 }

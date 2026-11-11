@@ -16,10 +16,13 @@
     "verify": "node scripts/check-layers.mjs && tsc --noEmit && vitest run && vite build"
   },
   "dependencies": {
+    "@types/three": "^0.187.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "sharp": "^0.35.5",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",

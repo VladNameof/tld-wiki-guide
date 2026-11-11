@@ -1,0 +1,291 @@
+import type { FandomMapSheetMeta } from '../../l0-primitives/types.ts';
+
+export const FANDOM_MAPS_MANIFEST: Readonly<Record<string, FandomMapSheetMeta>> = {
+  "mystery-lake": {
+    "regionId": "mystery-lake",
+    "file": "./fandom-maps/mystery-lake.webp",
+    "sourceFile": "Файл:ZOmapRU.jpg",
+    "imgW": 2186,
+    "imgH": 2400,
+    "sheetW": 910.83,
+    "sheetH": 1000,
+    "x0Px": 145.39,
+    "xStepPx": 103.327,
+    "x0Val": -100,
+    "xStepVal": 100,
+    "z0Px": 145.4,
+    "zStepPx": 103.342,
+    "z0Val": 1900,
+    "zStepVal": -100
+  },
+  "mountain-town": {
+    "regionId": "mountain-town",
+    "file": "./fandom-maps/mountain-town.webp",
+    "sourceFile": "Файл:MmapRU.jpg",
+    "imgW": 1797,
+    "imgH": 2400,
+    "sheetW": 748.75,
+    "sheetH": 1000,
+    "x0Px": 123.67,
+    "xStepPx": 86.191,
+    "x0Val": 300,
+    "xStepVal": 100,
+    "z0Px": 122.25,
+    "zStepPx": 86.242,
+    "z0Val": 2400,
+    "zStepVal": -100
+  },
+  "coastal-highway": {
+    "regionId": "coastal-highway",
+    "file": "./fandom-maps/coastal-highway.webp",
+    "sourceFile": "Файл:PSHmapRU.jpg",
+    "imgW": 2400,
+    "imgH": 1864,
+    "sheetW": 1000,
+    "sheetH": 776.67,
+    "x0Px": 125.58,
+    "xStepPx": 89.462,
+    "x0Val": -1300,
+    "xStepVal": 100,
+    "z0Px": 125.6,
+    "zStepPx": 89.476,
+    "z0Val": 1300,
+    "zStepVal": -100
+  },
+  "pleasant-valley": {
+    "regionId": "pleasant-valley",
+    "file": "./fandom-maps/pleasant-valley.webp",
+    "sourceFile": "Файл:ODmapRU.jpg",
+    "imgW": 2400,
+    "imgH": 2365,
+    "sheetW": 1000,
+    "sheetH": 985.42,
+    "x0Px": 104.34,
+    "xStepPx": 73.061,
+    "x0Val": 0,
+    "xStepVal": 100,
+    "z0Px": 69.88,
+    "zStepPx": 73.101,
+    "z0Val": 200,
+    "zStepVal": 100,
+    "swapWorldXZ": true
+  },
+  "timberwolf-mountain": {
+    "regionId": "timberwolf-mountain",
+    "file": "./fandom-maps/timberwolf-mountain.webp",
+    "sourceFile": "Файл:VGmapRU.jpg",
+    "imgW": 2018,
+    "imgH": 2400,
+    "sheetW": 840.83,
+    "sheetH": 1000,
+    "x0Px": 137.27,
+    "xStepPx": 96.419,
+    "x0Val": 100,
+    "xStepVal": 100,
+    "z0Px": 137.27,
+    "zStepPx": 96.423,
+    "z0Val": 1900,
+    "zStepVal": -100
+  },
+  "forlorn-muskeg": {
+    "regionId": "forlorn-muskeg",
+    "file": "./fandom-maps/forlorn-muskeg.webp",
+    "sourceFile": "Файл:OTmapRU.jpg",
+    "imgW": 2039,
+    "imgH": 2400,
+    "sheetW": 849.58,
+    "sheetH": 1000,
+    "x0Px": 137.69,
+    "xStepPx": 93.114,
+    "x0Val": -100,
+    "xStepVal": 100,
+    "z0Px": 62.96,
+    "zStepPx": 91.911,
+    "z0Val": 2100,
+    "zStepVal": -100
+  },
+  "desolation-point": {
+    "regionId": "desolation-point",
+    "file": "./fandom-maps/desolation-point.webp",
+    "sourceFile": "Файл:ZZAPUSmapRU.jpg",
+    "imgW": 2397,
+    "imgH": 2400,
+    "sheetW": 998.75,
+    "sheetH": 1000,
+    "x0Px": 113.17,
+    "xStepPx": 166.944,
+    "x0Val": 100,
+    "xStepVal": 100,
+    "z0Px": 202.22,
+    "zStepPx": 166.944,
+    "z0Val": 1600,
+    "zStepVal": -100
+  },
+  "broken-railroad": {
+    "regionId": "broken-railroad",
+    "file": "./fandom-maps/broken-railroad.webp",
+    "sourceFile": "Файл:RZHDmapRU.jpg",
+    "imgW": 2400,
+    "imgH": 2321,
+    "sheetW": 1000,
+    "sheetH": 967.08,
+    "x0Px": 197.56,
+    "xStepPx": 133.734,
+    "x0Val": 200,
+    "xStepVal": 100,
+    "z0Px": 195.51,
+    "zStepPx": 133.734,
+    "z0Val": -200,
+    "zStepVal": 100,
+    "swapWorldXZ": true
+  },
+  "hushed-river-valley": {
+    "regionId": "hushed-river-valley",
+    "file": "./fandom-maps/hushed-river-valley.webp",
+    "sourceFile": "Файл:DTRmapRU.jpg",
+    "imgW": 2183,
+    "imgH": 2400,
+    "sheetW": 909.58,
+    "sheetH": 1000,
+    "x0Px": 157.08,
+    "xStepPx": 109.999,
+    "x0Val": 100,
+    "xStepVal": 100,
+    "z0Px": 155.26,
+    "zStepPx": 110.073,
+    "z0Val": 1800,
+    "zStepVal": -100
+  },
+  "bleak-inlet": {
+    "regionId": "bleak-inlet",
+    "file": "./fandom-maps/bleak-inlet.webp",
+    "sourceFile": "Файл:BBmapRU.jpg",
+    "imgW": 2218,
+    "imgH": 2400,
+    "sheetW": 924.17,
+    "sheetH": 1000,
+    "x0Px": 143.75,
+    "xStepPx": 91.807,
+    "x0Val": -1200,
+    "xStepVal": 100,
+    "z0Px": 145.24,
+    "zStepPx": 91.733,
+    "z0Val": 1300,
+    "zStepVal": -100
+  },
+  "ash-canyon": {
+    "regionId": "ash-canyon",
+    "file": "./fandom-maps/ash-canyon.webp",
+    "sourceFile": "Файл:PKmapRU.jpg",
+    "imgW": 2030,
+    "imgH": 2400,
+    "sheetW": 845.83,
+    "sheetH": 1000,
+    "x0Px": 71.82,
+    "xStepPx": 104.746,
+    "x0Val": -900,
+    "xStepVal": 100,
+    "z0Px": 68.66,
+    "zStepPx": 104.746,
+    "z0Val": 900,
+    "zStepVal": -100
+  },
+  "blackrock": {
+    "regionId": "blackrock",
+    "file": "./fandom-maps/blackrock.webp",
+    "sourceFile": "Файл:CHKmapRU.jpg",
+    "imgW": 2227,
+    "imgH": 2400,
+    "sheetW": 927.92,
+    "sheetH": 1000,
+    "x0Px": 68.11,
+    "xStepPx": 94.964,
+    "x0Val": -1100,
+    "xStepVal": 100,
+    "z0Px": 35.68,
+    "zStepPx": 94.964,
+    "z0Val": 1000,
+    "zStepVal": -100
+  },
+  "forsaken-airfield": {
+    "regionId": "forsaken-airfield",
+    "file": "./fandom-maps/forsaken-airfield.webp",
+    "sourceFile": "Файл:BAmapRU.jpg",
+    "imgW": 2155,
+    "imgH": 2400,
+    "sheetW": 897.92,
+    "sheetH": 1000,
+    "x0Px": 108.93,
+    "xStepPx": 69.131,
+    "x0Val": -1400,
+    "xStepVal": 100,
+    "z0Px": 105.57,
+    "zStepPx": 69.284,
+    "z0Val": 1400,
+    "zStepVal": -100
+  },
+  "zone-of-contamination": {
+    "regionId": "zone-of-contamination",
+    "file": "./fandom-maps/zone-of-contamination.webp",
+    "sourceFile": "Файл:ZZmapRU.jpg",
+    "imgW": 2021,
+    "imgH": 2400,
+    "sheetW": 842.08,
+    "sheetH": 1000,
+    "x0Px": 148.41,
+    "xStepPx": 95.444,
+    "x0Val": -900,
+    "xStepVal": 100,
+    "z0Px": 146.86,
+    "zStepPx": 95.543,
+    "z0Val": 700,
+    "zStepVal": -100
+  },
+  "sundered-pass": {
+    "regionId": "sundered-pass",
+    "file": "./fandom-maps/sundered-pass.webp",
+    "sourceFile": "Файл:OPmapRU.jpg",
+    "imgW": 2039,
+    "imgH": 2400,
+    "sheetW": 849.58,
+    "sheetH": 1000,
+    "x0Px": 116.76,
+    "xStepPx": 72.143,
+    "x0Val": 1200,
+    "xStepVal": -100,
+    "z0Px": 115.63,
+    "zStepPx": 72.244,
+    "z0Val": -1300,
+    "zStepVal": 100
+  }
+} as const;
+
+export function leafletCoordsToWorldXZ(
+  meta: FandomMapSheetMeta,
+  leafletX: number,
+  leafletY: number,
+): { readonly worldX: number; readonly worldZ: number } {
+  const px = (leafletX / meta.sheetW) * meta.imgW;
+  const py = (1 - leafletY / meta.sheetH) * meta.imgH;
+  const mapX = meta.x0Val + ((px - meta.x0Px) / meta.xStepPx) * meta.xStepVal;
+  const mapZ = meta.z0Val + ((py - meta.z0Px) / meta.zStepPx) * meta.zStepVal;
+  if (meta.swapWorldXZ) {
+    return { worldX: Math.round(mapZ), worldZ: Math.round(mapX) };
+  }
+  return { worldX: Math.round(mapX), worldZ: Math.round(mapZ) };
+}
+
+export function worldXZToLeafletCoords(
+  meta: FandomMapSheetMeta,
+  worldX: number,
+  worldZ: number,
+): { readonly x: number; readonly y: number } {
+  const mapX = meta.swapWorldXZ ? worldZ : worldX;
+  const mapZ = meta.swapWorldXZ ? worldX : worldZ;
+  const px = meta.x0Px + ((mapX - meta.x0Val) / meta.xStepVal) * meta.xStepPx;
+  const py = meta.z0Px + ((mapZ - meta.z0Val) / meta.zStepVal) * meta.zStepPx;
+  return {
+    x: Number(((px / meta.imgW) * meta.sheetW).toFixed(2)),
+    y: Number(((1 - py / meta.imgH) * meta.sheetH).toFixed(2)),
+  };
+}

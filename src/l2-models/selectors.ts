@@ -2,6 +2,7 @@ import { matchesSearchQuery } from '../l0-primitives/textUtils.ts';
 import type {
   BuildingDifficultyRule,
   DifficultyId,
+  FandomMapSheetMeta,
   FandomSyncedArticle,
   MapBuildingFeature,
   MapExtraPath,
@@ -32,8 +33,13 @@ import { REGIONS_DATA } from './data/regionsData.ts';
 import { STREET_VIEW_NODES } from './data/streetViewData.ts';
 import streetViewVideoMetaJson from './data/streetViewVideoMeta.json';
 import wikiImagesManifest from './data/wikiImagesManifest.json';
+import { FANDOM_MAPS_MANIFEST } from './data/fandomMapsManifest.ts';
 
 const IMAGE_MANIFEST = wikiImagesManifest as Readonly<Record<string, string>>;
+
+export function getFandomMapMeta(regionId: string): FandomMapSheetMeta | null {
+  return FANDOM_MAPS_MANIFEST[regionId] ?? null;
+}
 
 export function getWikiImageUrl(imageKey: string): string | null {
   return IMAGE_MANIFEST[imageKey] ?? null;

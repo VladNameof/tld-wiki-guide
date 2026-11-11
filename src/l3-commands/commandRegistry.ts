@@ -1,6 +1,7 @@
 import { MARKER_CATEGORIES } from '../l0-primitives/constants.ts';
 import { clampMapCoord } from '../l0-primitives/textUtils.ts';
 import type {
+  Active3DPointTarget,
   CanvasDetailLayers,
   CanvasLayerKey,
   CustomCharcoalNote,
@@ -30,8 +31,10 @@ export interface AppSessionState {
   readonly enabledCategories: readonly MarkerCategory[];
   readonly showMarkerLabels: boolean;
   readonly showMapMicroDetails: boolean;
+  readonly showWikiOverlayMarkers: boolean;
   readonly canvasLayers: CanvasDetailLayers;
   readonly activeStreetViewNodeId: string | null;
+  readonly active3DLocation: Active3DPointTarget | null;
   readonly isDrawingCustomNote: boolean;
   readonly snowEnabled: boolean;
   readonly isSearchModalOpen: boolean;
@@ -53,11 +56,14 @@ export interface CommandPayloads {
   'map.setAllCategories': { readonly enabled: boolean };
   'map.toggleMarkerLabels': Record<string, never>;
   'map.toggleMicroDetails': Record<string, never>;
+  'map.toggleWikiOverlayMarkers': Record<string, never>;
   'map.toggleCanvasLayer': { readonly layer: CanvasLayerKey };
   'map.setAllCanvasLayers': { readonly enabled: boolean };
   'map.setDrawingNoteMode': { readonly active: boolean };
   'streetview.openNode': { readonly nodeId: string; readonly regionId?: string };
   'streetview.close': Record<string, never>;
+  'terrain3d.openPoint': Active3DPointTarget;
+  'terrain3d.close': Record<string, never>;
   'ui.toggleSnow': Record<string, never>;
   'ui.setSearchModalOpen': { readonly open: boolean };
   'survivor.toggleVisited': { readonly markerId: string };
@@ -68,6 +74,16 @@ export interface CommandPayloads {
     readonly title: string;
     readonly note: string;
     readonly icon: CustomNoteIcon;
+    readonly itemsSummary?: string;
+    readonly weightKg?: number;
+  };
+  'survivor.updateCustomNote': {
+    readonly noteId: string;
+    readonly title: string;
+    readonly note: string;
+    readonly icon: CustomNoteIcon;
+    readonly itemsSummary?: string;
+    readonly weightKg?: number;
   };
   'survivor.removeCustomNote': { readonly noteId: string };
   'survivor.importJournal': { readonly json: string };
@@ -107,8 +123,10 @@ function createInitialState(): AppSessionState {
     enabledCategories: ALL_CATEGORY_IDS,
     showMarkerLabels: false,
     showMapMicroDetails: true,
+    showWikiOverlayMarkers: false,
     canvasLayers: ALL_CANVAS_LAYERS_ON,
     activeStreetViewNodeId: null,
+    active3DLocation: null,
     isDrawingCustomNote: false,
     snowEnabled: true,
     isSearchModalOpen: false,
@@ -216,6 +234,10 @@ export class TldCommandEngine {
         };
         break;
       }
+      case 'map.toggleWikiOverlayMarkers': {
+        next = { ...prev, showWikiOverlayMarkers: !prev.showWikiOverlayMarkers };
+        break;
+      }
       case 'map.toggleCanvasLayer': {
         const p = payload as CommandPayloads['map.toggleCanvasLayer'];
         const updated: CanvasDetailLayers = {
@@ -261,6 +283,22 @@ export class TldCommandEngine {
         next = { ...prev, activeStreetViewNodeId: null };
         break;
       }
+      case 'terrain3d.openPoint': {
+        const p = payload as CommandPayloads['terrain3d.openPoint'];
+        next = {
+          ...prev,
+          activeSection: 'map',
+          mapViewLevel: 'region',
+          selectedRegionId: p.regionId,
+          active3DLocation: p,
+          isDrawingCustomNote: false,
+        };
+        break;
+      }
+      case 'terrain3d.close': {
+        next = { ...prev, active3DLocation: null };
+        break;
+      }
       case 'ui.toggleSnow': {
         next = { ...prev, snowEnabled: !prev.snowEnabled };
         break;
@@ -283,8 +321,14 @@ export class TldCommandEngine {
       }
       case 'survivor.addCustomNote': {
         const p = payload as CommandPayloads['survivor.addCustomNote'];
-        const cleanTitle = sanitizeUntrustedWikiText(p.title, 80) || 'Угольная заметка';
+        const cleanTitle = sanitizeUntrustedWikiText(p.title, 80) || 'Схрон выжившего';
         const cleanBody = sanitizeUntrustedWikiText(p.note, 300);
+        const cleanItems = sanitizeUntrustedWikiText(p.itemsSummary, 220);
+        const rawW = Number(p.weightKg);
+        const weightKg =
+          Number.isFinite(rawW) && rawW > 0
+            ? Math.min(500, Math.round(rawW * 100) / 100)
+            : undefined;
         const newNote: CustomCharcoalNote = {
           id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           regionId: p.regionId,
@@ -293,6 +337,8 @@ export class TldCommandEngine {
           title: cleanTitle,
           note: cleanBody,
           icon: p.icon,
+          ...(cleanItems ? { itemsSummary: cleanItems } : {}),
+          ...(weightKg !== undefined ? { weightKg } : {}),
           createdAt: new Date().toISOString(),
         };
         const journal = {
@@ -301,6 +347,35 @@ export class TldCommandEngine {
         };
         saveJournalToStorage(journal);
         next = { ...prev, journal, isDrawingCustomNote: false };
+        break;
+      }
+      case 'survivor.updateCustomNote': {
+        const p = payload as CommandPayloads['survivor.updateCustomNote'];
+        const cleanTitle = sanitizeUntrustedWikiText(p.title, 80) || 'Схрон выжившего';
+        const cleanBody = sanitizeUntrustedWikiText(p.note, 300);
+        const cleanItems = sanitizeUntrustedWikiText(p.itemsSummary, 220);
+        const rawW = Number(p.weightKg);
+        const weightKg =
+          Number.isFinite(rawW) && rawW > 0
+            ? Math.min(500, Math.round(rawW * 100) / 100)
+            : undefined;
+        const journal = {
+          ...prev.journal,
+          customNotes: prev.journal.customNotes.map((n) =>
+            n.id === p.noteId
+              ? {
+                  ...n,
+                  title: cleanTitle,
+                  note: cleanBody,
+                  icon: p.icon,
+                  itemsSummary: cleanItems || undefined,
+                  weightKg,
+                }
+              : n,
+          ),
+        };
+        saveJournalToStorage(journal);
+        next = { ...prev, journal };
         break;
       }
       case 'survivor.removeCustomNote': {

@@ -10,6 +10,7 @@ import {
 import { GlobalSearchModal } from './components/GlobalSearchModal.tsx';
 import { HeaderHud } from './components/HeaderHud.tsx';
 import { HomePortalView } from './components/HomePortalView.tsx';
+import { LocationReconstructor3DModal } from './components/LocationReconstructor3DModal.tsx';
 import { RegionLeafletMap } from './components/RegionLeafletMap.tsx';
 import { SnowfallOverlay } from './components/SnowfallOverlay.tsx';
 import { StreetViewWalkerModal } from './components/StreetViewWalkerModal.tsx';
@@ -24,6 +25,7 @@ export function App() {
       <HeaderHud />
       <GlobalSearchModal />
       <StreetViewWalkerModal />
+      <LocationReconstructor3DModal />
 
       <main className="relative z-10 flex-1">
         {state.activeSection === 'home' && <HomePortalView />}

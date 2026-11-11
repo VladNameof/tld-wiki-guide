@@ -81,6 +81,17 @@
   color: #f09a3e !important;
 }
 
+/* Преобразование точных карт сообщества Fandom в стилизацию сайта */
+.tld-fandom-sheet--charcoal {
+  filter: sepia(0.1) contrast(1.05) brightness(0.97);
+  transition: filter 0.25s ease;
+}
+
+.tld-fandom-sheet--aurora {
+  filter: invert(0.91) hue-rotate(176deg) contrast(1.14) saturate(1.2) brightness(0.91);
+  transition: filter 0.25s ease;
+}
+
 /* Тонкий скроллбар в холодных тонах */
 ::-webkit-scrollbar {
   width: 8px;
